@@ -4,3 +4,9 @@ samples/private/
 *.sdb
 *.idb
 cwmoney_*_db_CSV_*
+
+# Dart / Flutter
+.dart_tool/
+build/
+# Libraries don't commit lockfiles; the app does (app/pubspec.lock).
+packages/*/pubspec.lock

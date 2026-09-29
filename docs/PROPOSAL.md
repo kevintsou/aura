@@ -1,7 +1,7 @@
 # Aura 記帳 App — 專案提案 (Proposal)
 
-> 狀態：草案 v0.2 · 2026-09-29（v0.2：加入真實 CSV 樣本的分析結果、AI 消費分析 Agent、訂閱制）
-> 目標：開發一款手機記帳 App，**功能上涵蓋 CWMoney**，並且**能讀寫 CWMoney 的備份檔與匯出檔**，讓 CWMoney 使用者可以無痛搬家，必要時也能搬回去。另外提供一個 **AI 消費分析 Agent**，作為**訂閱制**的付費功能。
+> 狀態：v0.3 · 2026-09-29（v0.3：**完全免費、開放**；AI 改成使用者自備 API，BYOK；預設 OpenAI GPT API，會送發票品項明細。第一版實作已經在 repo 裡）
+> 目標：開發一款手機記帳 App，**功能上涵蓋 CWMoney**，並且**能讀寫 CWMoney 的備份檔與匯出檔**，讓 CWMoney 使用者可以無痛搬家，必要時也能搬回去。另外提供 **AI 消費分析**：使用者**接上自己的 AI**，可以是 OpenAI API 金鑰、任何 OpenAI 相容服務，或自己的 Agent。
 
 ---
 
@@ -19,7 +19,7 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 1. **資料主權**：本地優先，完整讀寫 CWMoney 的資料檔，不綁定雲端帳號。
 2. **無痛轉移**：匯入 CWMoney 備份以後，分類、帳戶、專案、歷史紀錄都跟原本一模一樣。
 3. **可逆**：能匯出成 CWMoney 可以還原的備份檔，降低使用者試用的心理門檻。
-4. **AI 分析**：CWMoney 只有圖表；Aura 讓使用者直接用自然語言問自己的帳，例如「這三個月外食比去年多多少？」，並主動提供洞察。
+4. **AI 分析，而且自己作主**：CWMoney 只有圖表；Aura 讓使用者直接用自然語言問自己的帳，例如「這三個月外食比去年多多少？」。AI 由使用者自己接，Aura 不收費，也不經過任何 Aura 伺服器。
 
 ---
 
@@ -87,10 +87,15 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 | 密碼／生物辨識鎖 | P1 |
 | 桌面小工具、快速記帳 | P2 |
 
-### 3.5 AI 消費分析 Agent（訂閱功能 · Aura Pro）
+### 3.5 AI 消費分析 Agent（免費，使用者自備 AI）
+
+連線方式：**OpenAI Chat Completions 相容協定＋tool calling**。預設是 OpenAI GPT API，也有 OpenRouter、Ollama、LM Studio、自訂 Agent 的預設選項。規格見 [`ai-agent-api.md`](ai-agent-api.md)。✅ = 第一版已實作。
+
 | 功能 | 說明 | 優先級 |
 |---|---|---|
-| **自然語言問答** | 「上個月外食花多少？」、「今年加油比去年多嗎？」、「哪張信用卡刷最多？」。Agent 查使用者的帳以後回答，附上數字和圖表 | P1 |
+| **AI 連線設定（BYOK）** | 服務預設選項、API 網址、金鑰（存在 Keychain／Keystore）、模型清單、測試連線、自訂標頭、隱私開關 | ✅ P0 |
+| **自然語言問答** | 「上個月外食花多少？」、「今年加油比去年多嗎？」、「哪張信用卡刷最多？」。Agent 查使用者的帳以後回答，附上數字 | ✅ P0（圖表 P1） |
+| **查詢透明化** | 對話裡每一次工具呼叫，都可以點開看「AI 的查詢參數」和「送給 AI 的資料」 | ✅ P0 |
 | **月報洞察** | 每月自動產生摘要：花費變化最大的分類、異常支出、跟預算的差距 | P1 |
 | **固定支出偵測** | 從歷史紀錄找出週期性的扣款（例如串流訂閱、房貸、管理費），一鍵轉成週期收支 | P1 |
 | **發票品項自動分類** | 發票明細 → 分類／子分類。先用使用者自己的歷史建立規則（本機、免費），規則對不到才交給 LLM | P1 |
@@ -113,9 +118,9 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 | 金額 | 用**整數的最小單位**（minor units）或 Decimal 字串存 | 避免浮點數誤差；匯入 CWMoney 的 REAL 欄位時要明確做捨入 |
 | 狀態管理 | Riverpod | 好測試、社群主流 |
 | 同步（P2） | 以 CRDT／變更日誌為基礎，後端再評估（Supabase 或自建） | 本地優先，同步是加值功能 |
-| **AI Gateway 後端** | TypeScript（Node）或 Python（FastAPI），部署在 Cloud Run 或 Fly.io；Postgres 只存帳號、訂閱權限和用量 | 一個很薄的服務，**不存任何帳務資料** |
-| **LLM 供應商** | **預設 OpenAI GPT 系列**，透過 provider adapter 抽象化，也可以換成其他供應商或自架的開源模型 | 可以依成本和品質切換，不被單一供應商綁住 |
-| **訂閱與付款** | App Store／Google Play 的應用程式內購買（IAP），用 RevenueCat 管理 | 數位服務依商店規定必須走 IAP；RevenueCat 負責收據驗證和跨平台的訂閱狀態 |
+| **AI 連線** | **沒有後端**。手機直接呼叫使用者設定的端點，協定是 OpenAI Chat Completions＋tools | 免費、開放；使用者自己控制資料和費用；一個協定就能接上 OpenAI、OpenRouter、本機模型和自訂 Agent |
+| **預設 LLM** | OpenAI GPT API（預設模型 `gpt-5-mini`，使用者可以自己改，或從 `/models` 選） | 使用者指定 |
+| **金鑰保存** | `flutter_secure_storage`（iOS Keychain、Android Keystore），每個服務各存一把 | 金鑰不離開手機 |
 
 > 替代方案：React Native (Expo) 加 `expo-sqlite`。如果團隊比較熟 TypeScript 可以選這個，4.2 節的相容層設計不受影響。
 
@@ -137,14 +142,13 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 ```
 
 ```
-┌──────── 手機（本地優先）──────────┐        ┌────────── Aura AI Gateway ──────────┐
-│ AI 對話 UI                        │  HTTPS │ 驗證 → 訂閱權限 → 配額與限流          │
-│ Local Tool Runner ◄───────────────┼────────┤ Agent 執行迴圈（工具呼叫）            │
-│   · query_transactions(filter)    │  SSE   │ Provider Adapter ──► OpenAI（預設）  │
-│   · aggregate(group_by, period)   │        │                  └─► 其他／自架模型   │
-│   · detect_recurring()            │        │ 用量計費 · 只記錄不含個資的 log         │
-│ 個資遮蔽（載具號碼、帳號）          │        └─────────────────────────────────────┘
-└───────────────────────────────────┘                ▲ RevenueCat webhook（訂閱狀態）
+┌──────────────── 手機（本地優先，沒有 Aura 伺服器）────────────────┐
+│ AI 助理 UI ── AuraAgent（工具呼叫迴圈） ── OpenAiCompatibleClient ─┼──► 使用者設定的端點
+│                    │                                              │    （OpenAI／OpenRouter／
+│              ToolRegistry：get_ledger_overview、                   │     Ollama／自訂 Agent）
+│              aggregate_transactions、search_transactions、         │
+│              search_invoice_items ── 在本機帳本上執行並遮蔽個資     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 **設計原則：內部 schema 和 CWMoney 格式分開。** Aura 用自己乾淨、正規化的資料模型；所有 CWMoney 的格式細節都集中在 `interop` 這一層。好處是：
@@ -161,28 +165,23 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 3. 匯出時先還原 `legacy_payload`，再用 Aura 的資料覆蓋有對應的欄位。
 4. 用 **golden file 測試**：樣本檔 → 匯入 → 匯出 → 逐表、逐欄和原檔做 diff，差異必須是 0，或者在允許清單裡。
 
-### 4.4 AI Agent 設計：工具在手機上執行
+### 4.4 AI Agent 設計：工具在手機上執行（已實作）
 
-Aura 是本地優先的 App，帳務資料**不上傳到我們的伺服器**。AI Agent 的做法是「**後端負責思考，手機負責查資料**」：
+Aura 是本地優先的 App，帳務資料不會整份上傳。做法是「**AI 負責思考，手機負責查資料和計算**」：
 
-1. 使用者提問。App 把問題加上**資料摘要**（有哪些分類和帳戶、資料的日期範圍，不含明細）送到 Gateway。
-2. Gateway 檢查訂閱和配額後，交給 LLM。LLM 決定要呼叫哪個工具，例如 `aggregate(kind=expense, category="生活費/午餐", period="2026-06..2026-08", group_by=month)`。
-3. Gateway 把工具呼叫**轉回手機**，由手機在本機的 SQLite 上執行。
-4. 手機只回傳**彙總結果**或必要的少量明細，而且會先**遮蔽個資**（載具號碼、統編、帳號一律遮蔽；帳戶名稱可以用別名代替）。
-5. LLM 產生回答，用 SSE 串流回手機，附帶結構化的圖表資料，由 App 自己畫圖。
+1. 使用者提問。App 把問題和工具定義送到使用者設定的端點。
+2. AI 決定要呼叫哪個工具，例如 `aggregate_transactions(group_by=month, category=午餐, date_from=2026-06-01)`。
+3. 手機在本機帳本上執行工具，**數字由程式計算**，不讓 LLM 心算。結果會先遮蔽個資：不送載具號碼和統編，長串數字只留末 4 碼。
+4. 結果送回 AI，由 AI 產生回答。一個問題最多 8 輪。
+5. 對話裡每一個工具呼叫都可以展開，看到實際送出的 JSON。
 
-**好處：** 伺服器上沒有帳務資料，資安和個資法的風險最小；使用者可以在設定裡看到每次送出了什麼。
-**代價：** 每個問題要來回好幾次，所以工具要設計得夠粗（一次彙總好），把來回次數壓在 2–3 次以內。
+**程式碼位置：** `packages/aura_ai`（純 Dart，可以單獨測試）：
+- `AiEndpointConfig`／`AiPreset`：連線設定
+- `OpenAiCompatibleClient`：協定實作
+- `ledgerTools()`：帳本工具
+- `AuraAgent`：工具呼叫迴圈
 
-**成本控制：**
-- 分類、固定支出偵測這類工作**先在本機用規則和統計處理**，LLM 只負責理解問題和寫出說明。
-- 依任務選模型：簡單的分類用小模型，問答和洞察用主力模型。
-- 每個訂閱方案有每月配額；Gateway 做計量和限流，用 prompt caching 降低重複成本。
-
-**供應商與隱私：**
-- 預設用 OpenAI API（API 的資料依官方條款預設不拿去訓練），另外申請 zero data retention。
-- Provider Adapter 讓我們可以切換到其他供應商或自架的開源模型，例如企業版或重視隱私的使用者。
-- 第一次使用前要**明確同意**，並說明會送出哪些資料。
+**成本：** 由使用者自己的 API 帳號支付。App 會顯示每次回答用了多少 token。工具回傳的是彙總結果，並限制明細筆數，讓每次請求的 token 量保持在合理範圍。
 
 ---
 
@@ -207,10 +206,6 @@ Invoice     id, number, date, seller_tax_id, seller_name, seller_address,
             carrier(敏感，要遮蔽), txn_id?
 InvoiceItem invoice_id, name, qty(decimal), amount(decimal, 可以是負數)
 FxRate      currency, rate_to_base, updated_at
--- 後端（只有這些，沒有帳務資料）
-User        id, auth_provider, created_at
-Entitlement user_id, plan(free|pro), expires_at, source(revenuecat)
-AiUsage     user_id, month, requests, input_tokens, output_tokens, cost
 ```
 
 CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](cwmoney-format.md)。
@@ -219,18 +214,12 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 
 ---
 
-## 6. 商業模式：訂閱制
+## 6. 開放與免費
 
-| 方案 | 內容 | 價格（暫定） |
-|---|---|---|
-| **免費** | 所有記帳功能、報表、預算、**CWMoney 匯入／匯出**、本機備份 | 免費 |
-| **Aura Pro** | AI 消費分析 Agent（有每月配額）、月報洞察、發票自動分類、雲端硬碟自動備份；之後加入多裝置同步和共享帳本 | 建議 NT$99–149／月，或 NT$990–1,290／年，**等 AI 成本試算後再決定**（參考：CWMoney VIP 個人方案約 NT$90／月） |
-
-**原則：**
-- **資料匯出永遠免費。** 這是「資料主權」的承諾，也是吸引 CWMoney 使用者搬家的主要理由。
-- 付款一律走 App Store／Google Play 的 IAP，由 RevenueCat 管理。Gateway 用 RevenueCat webhook 和 API 確認訂閱權限。
-- 提供首次 7 天免費試用。配額用完以後可以降級到比較便宜的模型，或加購額度，避免使用者突然完全不能用。
-- **單位經濟**：每個 Pro 使用者每月的 LLM 成本要控制在訂閱費的 20–30% 以內。M5 會用真實資料的查詢模式做成本試算。
+- **App 完全免費**：沒有付費功能、沒有廣告、沒有帳號系統，也沒有 Aura 伺服器。
+- **AI 自備（BYOK）**：使用者用自己的 OpenAI API 金鑰（或任何相容服務、本機模型、自己的 Agent），費用直接付給那個服務。
+- **資料匯入匯出永遠可用**，包括 CWMoney 格式。
+- **開放**：Agent API 規格公開（[`ai-agent-api.md`](ai-agent-api.md)），也附上範例 Agent（`examples/mock_agent.py`）。原始碼授權待定（見第 10 節）。
 
 ---
 
@@ -241,7 +230,8 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 - **單元測試**：金額捨入、匯率換算、週期規則展開、預算計算。
 - **隱私**：樣本檔要先去識別化（`scripts/anonymize_cwm.py`）才能放進 repo；真實樣本只在本機測試，**不 commit**。
 - **CSV 匯入的驗收標準**：用真實樣本（17,158 筆）測試。解析成功率 100%；轉帳配對率 ≥ 97%，剩下的標記為 `needs_review`；依帳戶加總的「小計」要和 CWMoney 完全一致。
-- **AI 評測集**：準備一組問題和標準答案（例如「2025 年外食總額」），每次換模型或改 prompt 都要跑，比較正確率和成本。
+- **AI 評測集**：準備一組問題和標準答案（例如「2025 年外食總額」），每次換模型或改 prompt 都要跑，比較正確率和 token 用量。
+- **目前的測試**：`aura_core` 17 個、`aura_ai` 19 個、App widget 6 個。另外，匯入器已經用使用者的真實樣本（17,158 筆）在本機驗證過：解碼結果和 Python 參考實作逐字相同，收支加總完全一致。
 
 ---
 
@@ -253,7 +243,7 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 | **M1 骨架＋匯入** | Flutter 專案、Aura schema、**CWMoney CSV 匯入（兩代格式）**、帳戶與紀錄列表；拿到樣本後再加 `.sdb`／`.idb` 匯入 | 可以安裝的內測版，能匯入並瀏覽 CWMoney 的資料 | 3 週 |
 | **M2 記帳 MVP** | 記一筆、編輯、刪除；轉帳、專案、多幣別；基本報表；Aura 自己的備份 | Alpha | 4 週 |
 | **M3 V1** | 週期收支、預算、進階報表、照片、App 鎖、隱藏帳戶、雲端硬碟備份、**匯出 CWMoney `.idb`** | Beta → 上架 | 5 週 |
-| **M5 AI＋訂閱** | AI Gateway、本機工具執行、自然語言問答、月報洞察、固定支出偵測、發票自動分類；RevenueCat 訂閱；成本試算與 AI 評測集 | Aura Pro 上線 | 5 週（可以和 M3 部分並行） |
+| **M5 AI** | ✅ BYOK 連線設定、OpenAI 相容 client、本機帳本工具、Agent 迴圈、對話 UI（**第一版已完成**）；🔲 月報洞察、固定支出偵測、發票自動分類、回答附圖表、串流輸出、AI 評測集 | AI 助理 | 剩下的部分約 3 週 |
 | **M4 V2** | 發票載具同步與對獎、GPS、多裝置同步、共享帳本、桌面小工具、AI 預算模擬 | 2.x | 之後再排 |
 
 ---
@@ -268,9 +258,8 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 | 法律與商標 | 下架風險 | 只做檔案格式互通，不使用 CWMoney 的名稱、Logo、UI 素材，不碰私有雲端 API；上架文案用「支援匯入 CWMoney 備份檔」這類描述性用語 |
 | 電子發票 API 要申請 | P2 功能卡住 | 提早向財政部電子發票整合服務平台申請 AppID |
 | AI 的回答有錯（算錯金額） | 使用者失去信任 | **數字一律由本機工具計算**，LLM 只負責理解問題和寫說明；回答附上可以點進去看的明細；建立 AI 評測集 |
-| 財務資料送到第三方 LLM | 個資和信任風險 | 工具在手機上執行、只送彙總、遮蔽個資；明確同意；zero data retention；可以切換供應商 |
-| LLM 成本超過訂閱收入 | 虧錢 | 配額、依任務選模型、本機優先處理、prompt caching、上線前做成本試算 |
-| 商店的 IAP 規定和抽成（15–30%） | 毛利降低 | 定價時把抽成算進去；年繳方案提高留存 |
+| 財務資料送到第三方 LLM | 個資和信任風險 | 工具在手機上執行、只送查詢結果、遮蔽載具號碼、統編和卡號；查詢過程完全透明；使用者可以關閉品項分享，或改用本機模型 |
+| 使用者的 API 費用太高 | 使用者流失 | 工具只回傳彙總結果、限制明細筆數、顯示 token 用量；可以改用比較便宜的模型或本機模型 |
 
 ---
 
@@ -278,14 +267,11 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 
 1. **樣本檔**（最重要）：CSV 匯出已經分析完成（見 [`cwmoney-format.md`](cwmoney-format.md)）。還需要一份或多份 CWMoney 備份檔（`.idb`／`.sdb`），最好跟 CSV 是同一個時間點的。內容最好涵蓋轉帳、外幣、信用卡、專案、週期、預算、照片和發票紀錄。如果有隱私上的顧慮，可以另外開一個測試帳本來產生。
 2. **目標版本**：你的樣本是**經典版**（`cwmoney_ex2`）。新版 3.x 也要支援嗎？
-3. **平台**：iOS 和 Android 都要嗎？技術選型用 Flutter 可以嗎？
+3. **平台**：第一版用 Flutter 實作，iOS、Android 和網頁版都能 build。兩個手機平台都要上架嗎？
 4. **同步和共享帳本**：要列進 V1 嗎？這會決定要不要一開始就做後端。
-5. ~~商業模式~~ → 已確定**訂閱制**（見第 6 節）。定價區間可以嗎？
-6. **「openGPT model」是指哪一種？**
-   - (a) **OpenAI 的 GPT API**（雲端、依用量計費）。本提案目前**先照這個設計**。
-   - (b) **OpenAI 的開源權重模型**（gpt-oss），由我們自己架設（成本固定、資料完全不出我們的機房，但要管 GPU）。
-   - Provider Adapter 兩種都支援，差別在 M5 的部署和成本模型。
-7. **AI 可以看到多少資料？** 只送彙總（建議），還是可以送品項明細（分類準確度比較高，但隱私風險比較大）？
+5. ~~商業模式~~ → **完全免費、開放，AI 由使用者自備**。
+6. ~~LLM~~ → **OpenAI GPT API**（預設），可以送發票品項明細（有開關）。
+7. **授權**：「完全開放」是指原始碼要開源嗎？建議 **Apache-2.0**（有專利授權條款，對商業使用友善）或 **MIT**（最簡單）。如果不希望別人拿去做封閉的商業版本，可以考慮 **GPL-3.0**。
 8. **App 名稱**：就用 **Aura** 嗎？
 
 ---
