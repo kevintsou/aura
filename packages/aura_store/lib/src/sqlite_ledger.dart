@@ -363,6 +363,10 @@ class SqliteLedger implements LedgerStore {
       projectId: r['project_id'] as String?,
       note: r['note'] as String?,
       place: r['place'] as String?,
+      location: switch ((r['lat'], r['lng'])) {
+        (final num lat, final num lng) => GeoPoint(lat.toDouble(), lng.toDouble()),
+        _ => null,
+      },
       invoice: invoice,
       createdAt: switch (r['created_at']) {
         final String s => _parseDateTime(s),
@@ -664,7 +668,7 @@ class SqliteLedger implements LedgerStore {
         'UPDATE txns SET kind = ?, date = ?, account_id = ?, to_account_id = ?, '
         'amount = ?, to_amount = ?, base_amount = ?, fx_rate_display = ?, '
         'category_id = ?, project_id = ?, note = ?, place = ?, created_at = ?, '
-        'fee_of_txn_id = ?, needs_review = ?, legacy_rows = ?, recurring_id = ? WHERE id = ?',
+        'fee_of_txn_id = ?, needs_review = ?, legacy_rows = ?, recurring_id = ?, lat = ?, lng = ? WHERE id = ?',
         [...args.skip(1), txn.id],
       );
       _writeInvoice(txn);
@@ -744,8 +748,8 @@ const _insertBudget = 'INSERT INTO budgets (id, category_id, amount, sort) VALUE
 const _insertTxn =
     'INSERT INTO txns (id, kind, date, account_id, to_account_id, amount, '
     'to_amount, base_amount, fx_rate_display, category_id, project_id, note, '
-    'place, created_at, fee_of_txn_id, needs_review, legacy_rows, recurring_id) '
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    'place, created_at, fee_of_txn_id, needs_review, legacy_rows, recurring_id, lat, lng) '
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
 /// Values for [_insertTxn]; the id comes first.
 List<Object?> _txnArgs(Txn t) => [
@@ -767,6 +771,8 @@ List<Object?> _txnArgs(Txn t) => [
   t.needsReview ? 1 : 0,
   t.legacyRows.isEmpty ? null : jsonEncode(t.legacyRows),
   t.recurringId,
+  t.location?.lat,
+  t.location?.lng,
 ];
 
 const _insertRecurring =

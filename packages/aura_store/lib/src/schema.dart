@@ -128,6 +128,11 @@ const migrations = <String>[
   );
   CREATE INDEX photos_by_txn ON photos (txn_id);
   ''',
+  // 8: where a record was made (degrees, WGS 84).
+  '''
+  ALTER TABLE txns ADD COLUMN lat REAL;
+  ALTER TABLE txns ADD COLUMN lng REAL;
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

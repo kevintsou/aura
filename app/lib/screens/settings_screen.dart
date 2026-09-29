@@ -7,6 +7,7 @@ import 'ai_settings_screen.dart';
 import 'backup_screen.dart';
 import 'budgets_screen.dart';
 import 'categories_screen.dart';
+import 'dialogs.dart';
 import 'export_action.dart';
 import 'import_action.dart';
 import 'recurring_screen.dart';
@@ -66,6 +67,17 @@ class SettingsScreen extends StatelessWidget {
               context,
               MaterialPageRoute(builder: (_) => LockSettingsScreen(lock: app.lock)),
             ),
+          ),
+          SwitchListTile(
+            key: const Key('recordLocation'),
+            secondary: const Icon(Icons.place_outlined),
+            title: const Text('記帳時記錄位置'),
+            subtitle: const Text('新增的收入和支出記下當時的位置。只存在這台手機和你的備份裡，不會送給 AI'),
+            value: app.recordLocation,
+            onChanged: (on) async {
+              final problem = await app.setRecordLocation(on);
+              if (problem != null && context.mounted) showMessage(context, problem);
+            },
           ),
           ListTile(
             key: const Key('manageRecurring'),

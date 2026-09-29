@@ -207,6 +207,7 @@ class _Merger {
     projectId: _project(t.projectId),
     note: t.note,
     place: t.place,
+    location: t.location,
     invoice: t.invoice,
     createdAt: t.createdAt,
     feeOfTxnId: t.feeOfTxnId,

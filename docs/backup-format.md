@@ -36,7 +36,7 @@
     "recurring"?:   [{"id", "template": {紀錄的欄位，date 是第一次}, "unit", "every",
                       "until"?, "times"?, "next"?}],                  // 沒有 next 表示已結束
     "transactions": [{"id", "kind", "date", "amount", "baseAmount", "accountId"?, "toAccountId"?,
-                      "toAmount"?, "fxRate"?, "categoryId"?, "projectId"?, "note"?, "place"?,
+                      "toAmount"?, "fxRate"?, "categoryId"?, "projectId"?, "note"?, "place"?, "location"?,
                       "createdAt"?, "feeOf"?, "recurringId"?, "needsReview"?, "legacyRows"?,
                       "invoice"?: {"number", "sellerTaxId"?, "sellerName"?, "sellerAddress"?,
                                    "carrier"?, "items": [[name, quantity, amount]]}}],
@@ -46,7 +46,8 @@
 ```
 
 - 金額一律是**十進位字串**，不會有浮點誤差。
-- `budgets`、`recurring`、`recurringId`、`photos` 是後來加的欄位：舊的備份檔沒有它們，還原時就是沒有預算和週期收支；舊版 App 讀到新檔案會略過它們。
+- `location` 是 `[緯度, 經度]`（度，WGS 84），只有使用者打開「記帳時記錄位置」後新增的紀錄才有。
+- `budgets`、`recurring`、`recurringId`、`photos`、`location` 是後來加的欄位：舊的備份檔沒有它們，還原時就是沒有預算和週期收支；舊版 App 讀到新檔案會略過它們。
 - 日期是 `YYYY-MM-DD`。
 
 **加密（設了密碼時）：** 把 `data` 換成：

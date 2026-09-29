@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>開啟「記帳時記錄位置」後，新增的紀錄會記下當時的位置</string>
 	<key>NSCameraUsageDescription</key>
 	<string>拍收據或商品的照片附在紀錄上</string>
 	<key>NSPhotoLibraryUsageDescription</key>

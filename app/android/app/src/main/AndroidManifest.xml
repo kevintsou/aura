@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- App lock: unlock with fingerprint or face. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- Only when the user turns on "記帳時記錄位置"; an approximate fix is enough. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- Cleartext is allowed only so local endpoints (Ollama, LM Studio on
          the LAN) work; AiEndpointConfig.validate rejects http for any
          non-local host. -->

@@ -172,7 +172,7 @@ for line in records[1:]:
 | 匯率 | `Txn.fx_rate_display` | 只拿來顯示 |
 | 小計 | `Txn.base_amount`（decimal） | **報表以這一欄為準** |
 | 建檔時間 | `Txn.created_at` | 可以是空的 |
-| GPS | `Txn.lat`/`lng` | `0:0`、`0.0 : 0.0` 和空白都當成 `null` |
+| GPS | `Txn.location`（`GeoPoint`） | `0:0`、`0.0 : 0.0` 和空白都當成 `null`；匯出時寫成 `緯度 : 經度`，沒有位置時照 CWMoney 的寫法（發票紀錄 `0.0 : 0.0`，其他空白） |
 | 地址 | `Txn.place` 或 `Invoice.seller_address` | `" "` → `null` |
 | 發票號碼＋備註裡的明細 | `Invoice`＋`InvoiceItem[]` | 載具號碼存到 `Invoice.carrier`，**匯出和送給 AI 之前一律遮蔽** |
 | 備註 | `Txn.note` | 系統產生的 `[帳戶轉帳]` 不存；發票紀錄的 note 只保留使用者自己加的部分 |

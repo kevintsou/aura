@@ -136,6 +136,7 @@ class _Importer {
       projectId: _project(row.project)?.id,
       note: invoice == null ? _clean(row.note) : _invoiceUserNote(row.note),
       place: invoice == null ? _clean(row.address) : null,
+      location: GeoPoint.tryParse(row.gps),
       invoice: invoice,
       createdAt: p.createdAt,
       legacyRows: [row.fields],

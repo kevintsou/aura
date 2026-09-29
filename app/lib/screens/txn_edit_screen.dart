@@ -55,6 +55,11 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   final _newPhotos = <Uint8List>[];
   final _removedPhotos = <String>{};
 
+  /// Where the record was made; looked up for new records when the user
+  /// turned that on.
+  GeoPoint? _location;
+  var _locating = false;
+
   AppState get _app => widget.app;
   LedgerStore get _ledger => _app.ledger;
   Txn? get _old => widget.txn;
@@ -107,6 +112,11 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
       _note.text = t.note ?? '';
     }
     if (_rate.text.isEmpty) _rate.text = _lastRate(_accountId) ?? '';
+    _location = widget.txn?.location;
+    if (widget.txn == null && widget.recurring == null && !widget.repeat && _app.recordLocation) {
+      _locating = true;
+      _locate();
+    }
     for (final c in [_amount, _toAmount, _rate, _note, _every, _times]) {
       c.addListener(() => setState(() => _error = null));
     }
@@ -118,6 +128,16 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _locate() async {
+    final here = await _app.locationSource.current();
+    // Unless the user said not to while it was looking.
+    if (!mounted || !_locating) return;
+    setState(() {
+      _location = here;
+      _locating = false;
+    });
   }
 
   /// Most recent exchange rate recorded for [accountId].
@@ -238,6 +258,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
         projectId: _projectId,
         note: note.isEmpty ? null : note,
         place: _old?.place,
+        location: _isTransfer || _unit != null ? null : _location,
         invoice: (_old ?? widget.draft)?.invoice,
         createdAt: _old?.createdAt ?? _app.clock(),
         feeOfTxnId: _old?.feeOfTxnId,
@@ -534,6 +555,23 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             minLines: 1,
             decoration: const InputDecoration(labelText: '備註', border: OutlineInputBorder()),
           ),
+          if (!_isTransfer && _unit == null && (_location != null || _locating))
+            ListTile(
+              key: const Key('txnLocation'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.place_outlined),
+              title: const Text('位置'),
+              subtitle: Text(_locating ? '正在取得位置…' : _location.toString()),
+              trailing: IconButton(
+                key: const Key('removeLocation'),
+                tooltip: '不記錄位置',
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() {
+                  _location = null;
+                  _locating = false;
+                }),
+              ),
+            ),
           if (_unit == null) ...[
             const SizedBox(height: 16),
             Text('照片（收據、商品）', style: theme.textTheme.labelLarge),

@@ -406,6 +406,7 @@ Map<String, Object?> _txnToJson(Txn t) => {
   'projectId': ?t.projectId,
   'note': ?t.note,
   'place': ?t.place,
+  if (t.location case final p?) 'location': [p.lat, p.lng],
   'createdAt': ?t.createdAt?.toIso8601String(),
   'feeOf': ?t.feeOfTxnId,
   'recurringId': ?t.recurringId,
@@ -443,6 +444,10 @@ Txn _txnFromJson(Map<String, Object?> j) {
     projectId: j['projectId'] as String?,
     note: j['note'] as String?,
     place: j['place'] as String?,
+    location: switch (j['location']) {
+      [final num lat, final num lng] => GeoPoint(lat.toDouble(), lng.toDouble()),
+      _ => null,
+    },
     createdAt: j['createdAt'] == null ? null : DateTime.parse(j['createdAt'] as String),
     feeOfTxnId: j['feeOf'] as String?,
     recurringId: j['recurringId'] as String?,

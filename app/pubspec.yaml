@@ -29,6 +29,7 @@ dependencies:
   xml: ^7.1.0
   image_picker: ^1.2.3
   mobile_scanner: ^7.4.2
+  geolocator: ^14.0.1
 
 dev_dependencies:
   flutter_test:

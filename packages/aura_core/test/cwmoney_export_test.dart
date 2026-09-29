@@ -142,6 +142,45 @@ void main() {
     expect(back.ledger.transactions().map((t) => t.baseAmount).fold(Decimal.zero, (a, b) => a + b), d('53365'));
   });
 
+  test('GPS positions go out and come back in', () {
+    final ledger = importCwmoneyCsv(_bytes).ledger;
+    expect(ledger.transactions().where((t) => t.location != null), isEmpty, reason: '"0:0" means none');
+    final lunch = ledger.transactions().firstWhere((t) => t.note == '便當');
+    final here = const GeoPoint(25.033964, 121.564468);
+    ledger.updateTxn(
+      Txn(
+        id: lunch.id,
+        kind: lunch.kind,
+        date: lunch.date,
+        accountId: lunch.accountId,
+        categoryId: lunch.categoryId,
+        amount: lunch.amount,
+        baseAmount: lunch.baseAmount,
+        note: lunch.note,
+        place: lunch.place,
+        location: here,
+        createdAt: lunch.createdAt,
+        legacyRows: lunch.legacyRows,
+      ),
+    );
+    final r = exportCwmoneyCsv(ledger, includeCarrier: true);
+    expect(r.unchanged, 10);
+    final row = _rows(r.bytes).firstWhere((r) => r[0] == '2026/09/18');
+    expect(row[10], '25.033964 : 121.564468');
+    expect(row.sublist(11), lunch.legacyRows.single.sublist(11), reason: 'the rest as it was');
+    final back = importCwmoneyCsv(r.bytes).ledger.transactions().firstWhere((t) => t.note == '便當');
+    expect(back.location, here);
+  });
+
+  test('GPS field forms', () {
+    expect(GeoPoint.tryParse('25.03 : 121.56'), const GeoPoint(25.03, 121.56));
+    expect(GeoPoint.tryParse('-33.8688:151.2093'), const GeoPoint(-33.8688, 151.2093));
+    for (final none in ['', ' ', '0:0', '0.0 : 0.0', '91:0', 'abc']) {
+      expect(GeoPoint.tryParse(none), isNull, reason: none);
+    }
+    expect(const GeoPoint(25.033964, 121.564468).toString(), '25.03396, 121.56447');
+  });
+
   test('exports a date range', () {
     final ledger = importCwmoneyCsv(_bytes).ledger;
     final r = exportCwmoneyCsv(ledger, from: DateTime(2026, 9, 24), to: DateTime(2026, 9, 25), includeCarrier: true);

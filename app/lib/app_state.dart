@@ -11,6 +11,7 @@ import 'cloud/google_drive.dart';
 import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
+import 'services/location_source.dart';
 import 'services/photo_picker.dart';
 import 'services/visible_ledger.dart';
 import 'services/snapshot_store.dart';
@@ -93,8 +94,10 @@ class AppState extends ChangeNotifier {
     GoogleTokens? google,
     CloudTargetFactory? cloudTargets,
     PhotoPicker? photoPicker,
+    LocationSource? locationSource,
   }) : lock = lock ?? AppLock.off(),
        photoPicker = photoPicker ?? DevicePhotoPicker(),
+       locationSource = locationSource ?? DeviceLocationSource(),
        _cloudStore = cloudStore ?? MemoryCloudSettingsStore(),
        _google = google,
        _cloudTargets = cloudTargets,
@@ -115,6 +118,22 @@ class AppState extends ChangeNotifier {
   final AppLock lock;
 
   final PhotoPicker photoPicker;
+  final LocationSource locationSource;
+
+  static const _metaRecordLocation = 'ui.recordLocation';
+
+  /// New income and expense records note where they were made. Off
+  /// unless the user turns it on.
+  bool get recordLocation => ledger.meta(_metaRecordLocation) == '1';
+
+  /// Turns [recordLocation] on or off; on asks for the permission first.
+  /// Returns the user-facing problem, if any.
+  Future<String?> setRecordLocation(bool on) async {
+    if (on && await lock.whileAway(locationSource.current) == null) {
+      return '無法取得位置。請確認手機的定位已開啟，並允許 Aura 使用位置。';
+    }
+    return write((l) => l.setMeta(_metaRecordLocation, on ? '1' : null));
+  }
 
   final CloudSettingsStore _cloudStore;
   final GoogleTokens? _google;

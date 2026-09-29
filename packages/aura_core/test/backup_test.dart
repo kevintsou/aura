@@ -27,7 +27,7 @@ Object? _snapshot(LedgerReader l) => [
       [
         t.id, t.kind, t.date, t.accountId, t.toAccountId, t.amount, t.toAmount, //
         t.baseAmount, t.fxRateDisplay, t.categoryId, t.projectId, t.note,
-        t.place, t.createdAt, t.feeOfTxnId, t.recurringId, t.needsReview, t.legacyRows,
+        t.place, t.location, t.createdAt, t.feeOfTxnId, t.recurringId, t.needsReview, t.legacyRows,
         t.invoice?.number, t.invoice?.sellerTaxId, t.invoice?.sellerName,
         t.invoice?.sellerAddress, t.invoice?.carrier,
         [for (final i in t.invoice?.items ?? const <InvoiceItem>[]) [i.name, i.quantity, i.amount]],
@@ -80,6 +80,17 @@ void main() {
       ),
     );
     recordDueRecurring(ledger, today: DateTime(2026, 9, 29));
+    ledger.addTxn(
+      Txn(
+        id: 'here',
+        kind: TxnKind.expense,
+        date: DateTime(2026, 9, 28),
+        accountId: cash.id,
+        amount: Decimal.fromInt(80),
+        baseAmount: Decimal.fromInt(80),
+        location: const GeoPoint(25.033964, 121.564468),
+      ),
+    );
     ledger.addPhoto(
       Photo(id: 'ph1', txnId: ledger.transactions().first.id, bytes: Uint8List.fromList(List.generate(300, (i) => i % 256))),
     );

@@ -191,6 +191,7 @@ class Txn {
     this.projectId,
     this.note,
     this.place,
+    this.location,
     this.invoice,
     this.createdAt,
     this.feeOfTxnId,
@@ -238,6 +239,9 @@ class Txn {
   final String? projectId;
   final String? note;
   final String? place;
+
+  /// Where the record was made, when the user turned that on.
+  final GeoPoint? location;
   final Invoice? invoice;
   final DateTime? createdAt;
 
@@ -278,6 +282,7 @@ class Txn {
     projectId: projectId,
     note: note,
     place: place,
+    location: location,
     invoice: invoice,
     createdAt: createdAt ?? this.createdAt,
     feeOfTxnId: identical(feeOfTxnId, _keep) ? this.feeOfTxnId : feeOfTxnId as String?,
@@ -288,3 +293,31 @@ class Txn {
 }
 
 const _keep = Object();
+
+/// A position in degrees (WGS 84).
+class GeoPoint {
+  const GeoPoint(this.lat, this.lng);
+
+  final double lat;
+  final double lng;
+
+  /// CWMoney's GPS field ("25.03 : 121.56" or "25.03:121.56"); null for
+  /// the blank and all-zero values it writes when there is no position.
+  static GeoPoint? tryParse(String s) {
+    final m = RegExp(r'^\s*(-?\d+(?:\.\d+)?)\s*:\s*(-?\d+(?:\.\d+)?)\s*$').firstMatch(s);
+    if (m == null) return null;
+    final lat = double.parse(m[1]!), lng = double.parse(m[2]!);
+    if ((lat == 0 && lng == 0) || lat.abs() > 90 || lng.abs() > 180) return null;
+    return GeoPoint(lat, lng);
+  }
+
+  /// "25.03300, 121.56540": five decimals is about a metre.
+  @override
+  String toString() => '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+
+  @override
+  bool operator ==(Object other) => other is GeoPoint && other.lat == lat && other.lng == lng;
+
+  @override
+  int get hashCode => Object.hash(lat, lng);
+}

@@ -427,6 +427,28 @@ void ledgerStoreContract(LedgerStore Function() create) {
     expect([for (final p in l.photos()) p.id], ['p9'], reason: 'orphans are dropped');
   });
 
+  test('a record keeps where it was made', () {
+    Txn at(String id, GeoPoint? p) => Txn(
+      id: id,
+      kind: TxnKind.expense,
+      date: DateTime(2026, 9, 1),
+      accountId: cash.id,
+      amount: Decimal.one,
+      baseAmount: Decimal.one,
+      categoryId: lunch.id,
+      location: p,
+    );
+    l
+      ..addTxn(at('t1', const GeoPoint(25.033964, 121.564468)))
+      ..addTxn(at('t2', null));
+    expect(l.txn('t1')!.location, const GeoPoint(25.033964, 121.564468));
+    expect(l.txn('t2')!.location, isNull);
+    l.updateTxn(at('t1', null));
+    expect(l.txn('t1')!.location, isNull);
+    l.updateTxn(at('t2', const GeoPoint(-33.8688, 151.2093)));
+    expect(l.transactions().firstWhere((t) => t.id == 't2').location, const GeoPoint(-33.8688, 151.2093));
+  });
+
   test('meta values are listed', () {
     l
       ..setMeta('a', '1')

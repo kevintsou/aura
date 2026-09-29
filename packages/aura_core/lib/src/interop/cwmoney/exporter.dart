@@ -166,7 +166,10 @@ class _Exporter {
         t.fxRateDisplay ?? '1',
         base,
         feeOf == null ? created : _cwmDateTime(feeOf.createdAt ?? t.createdAt),
-        invoice == null ? '' : '0.0 : 0.0',
+        switch (t.location) {
+          final p? => '${p.lat} : ${p.lng}',
+          null => invoice == null ? '' : '0.0 : 0.0',
+        },
         invoice == null
             ? _field(t.place ?? ' ')
             : _field('(${invoice.sellerName ?? ''}${invoice.sellerAddress == null ? '' : ',${invoice.sellerAddress}'})'),
@@ -220,7 +223,7 @@ class _Exporter {
           (final a, final b) => a == b,
         },
         9 => _parseDateTime(l) == _parseDateTime(g),
-        10 => true, // GPS: Aura does not keep it
+        10 => GeoPoint.tryParse(l) == GeoPoint.tryParse(g), // "0:0" and "" both mean none
         11 => legacy[12].isNotEmpty || _clean(l) == _clean(g), // invoices cannot be edited
         13 => l == g || (l == '2' && g == '0'), // a fee whose transfer was not found
         14 => note(legacy) == note(generated),
