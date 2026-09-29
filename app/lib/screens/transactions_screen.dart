@@ -6,6 +6,7 @@ import '../format.dart';
 import 'budgets_screen.dart';
 import 'category_picker.dart';
 import 'import_action.dart';
+import 'reports_screen.dart';
 import 'scan_invoice.dart';
 import 'txn_edit_screen.dart';
 
@@ -59,6 +60,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       _refreshIfChanged();
       final headers = [
         ?budgetSummary(context, widget.app),
+        for (final pair in widget.app.recentDuplicates) _DuplicateBanner(app: widget.app, pair: pair),
         if (_review > 0)
           MaterialBanner(
             content: Text('有 $_review 筆轉帳只找到一邊，請確認'),
@@ -100,6 +102,46 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       );
     },
   );
+}
+
+/// Two records that look like the same charge entered twice.
+class _DuplicateBanner extends StatelessWidget {
+  const _DuplicateBanner({required this.app, required this.pair});
+
+  final AppState app;
+  final List<Txn> pair;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = pair.first;
+    final dates = [for (final t in pair) t.date]..sort();
+    final what = a.invoice?.sellerName ?? a.note ?? '';
+    return MaterialBanner(
+      key: Key('duplicate-${duplicateKey(pair)}'),
+      leading: const Icon(Icons.content_copy_outlined),
+      content: Text(
+        '可能重複記帳：$what ${formatMoney(a.baseAmount)}'
+        '${dates.first == dates.last ? '，${formatDate(dates.first)} 記了兩次' : '，${formatDate(dates.first)} 和 ${formatDate(dates.last)} 各一筆'}',
+      ),
+      actions: [
+        TextButton(onPressed: () => app.notDuplicate(pair), child: const Text('不是重複')),
+        TextButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RecordsReportScreen(
+                app: app,
+                title: '可能重複的紀錄',
+                filter: TxnFilter(from: dates.first, to: dates.last),
+                ids: {for (final t in pair) t.id},
+              ),
+            ),
+          ),
+          child: const Text('查看'),
+        ),
+      ],
+    );
+  }
 }
 
 Future<void> openTxnEditor(BuildContext context, AppState app, [Txn? txn]) =>

@@ -11,6 +11,7 @@ export 'src/einvoice.dart';
 export 'src/interop/cwmoney/big5hkscs.dart' show decodeBig5Hkscs, encodeBig5Hkscs;
 export 'src/interop/cwmoney/csv_reader.dart';
 export 'src/interop/cwmoney/importer.dart';
+export 'src/insights.dart';
 export 'src/interop/cwmoney/merge.dart';
 export 'src/ledger.dart';
 export 'src/model.dart';

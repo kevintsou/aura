@@ -42,6 +42,9 @@ class _ReportData {
         (_, _Group.account) => byAccount(app.view, period, _kindOf(measure)!),
         (_, _Group.project) => byProject(app.view, period, _kindOf(measure)!),
       },
+      insights = period.isYear || period.isWeek || period.from.isAfter(app.clock())
+          ? const []
+          : app.insightsFor(period),
       netWorth = period.isWeek
           ? const []
           : netWorthByMonth(
@@ -64,6 +67,7 @@ class _ReportData {
   final List<CategoryTotal> categories;
   final List<GroupTotal> groups;
   final List<PeriodTotal> netWorth;
+  final List<Insight> insights;
 }
 
 TxnKind? _kindOf(_Measure m) => switch (m) {
@@ -135,10 +139,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     _Span.week => '近 12 週$what',
   };
 
-  void _openRecords(String title, TxnFilter filter) => Navigator.push(
+  void _openRecords(String title, TxnFilter filter, {Set<String>? ids}) => Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => RecordsReportScreen(app: _app, title: title, filter: filter),
+      builder: (_) => RecordsReportScreen(app: _app, title: title, filter: filter, ids: ids),
     ),
   );
 
@@ -213,6 +217,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 _Span.year => '去年',
               },
             ),
+            if (data.insights.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _InsightsCard(app: _app, month: p, insights: data.insights, onOpenRecords: _openRecords),
+            ],
             const SizedBox(height: 16),
             SegmentedButton<_Measure>(
               key: const Key('kindToggle'),
@@ -307,6 +315,106 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     },
   );
+}
+
+/// What stands out in the month, each line linking to what it is about,
+/// and a way to have the assistant write it up.
+class _InsightsCard extends StatelessWidget {
+  const _InsightsCard({required this.app, required this.month, required this.insights, required this.onOpenRecords});
+
+  final AppState app;
+  final Period month;
+  final List<Insight> insights;
+  final void Function(String title, TxnFilter filter, {Set<String>? ids}) onOpenRecords;
+
+  static IconData _icon(InsightKind k) => switch (k) {
+    InsightKind.total => Icons.summarize_outlined,
+    InsightKind.categoryUp => Icons.trending_up,
+    InsightKind.categoryDown => Icons.trending_down,
+    InsightKind.unusual => Icons.priority_high,
+    InsightKind.duplicate => Icons.content_copy_outlined,
+    InsightKind.overBudget => Icons.error_outline,
+    InsightKind.fastBudget => Icons.speed,
+  };
+
+  VoidCallback? _onTap(BuildContext context, Insight i) {
+    final label = _ReportsScreenState.periodLabel(month);
+    switch (i.kind) {
+      case InsightKind.categoryUp || InsightKind.categoryDown when i.categoryId != null:
+        final cat = app.view.category(i.categoryId!);
+        return () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CategoryReportScreen(app: app, period: month, kind: TxnKind.expense, main: cat),
+          ),
+        );
+      case InsightKind.unusual || InsightKind.duplicate when i.txnIds.isNotEmpty:
+        final dates = [for (final id in i.txnIds) ?app.view.txn(id)?.date]..sort();
+        if (dates.isEmpty) return null;
+        return () => onOpenRecords(
+          i.kind == InsightKind.duplicate ? '可能重複・$label' : '特別大的支出・$label',
+          TxnFilter(from: dates.first, to: dates.last),
+          ids: {...i.txnIds},
+        );
+      case InsightKind.overBudget || InsightKind.fastBudget:
+        return () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => BudgetsScreen(app: app, month: month)),
+        );
+      default:
+        return null;
+    }
+  }
+
+  String _prompt() {
+    final f = month.from;
+    return [
+      '請幫我寫 ${f.year} 年 ${f.month} 月的月報：整體收支、和之前比起來的變化、值得注意的地方，最後給我幾個具體的建議。'
+          'App 先找到了下面這些重點，請用查帳工具核對後再寫：',
+      for (final i in insights) '- ${i.text}',
+    ].join('\n');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _Section(
+      key: const Key('insights'),
+      title: '${month.from.month} 月重點',
+      subtitle: '和前三個月比較，點一下看細節',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (n, i) in insights.indexed)
+            ListTile(
+              key: Key('insight-$n'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                _icon(i.kind),
+                color: switch (i.kind) {
+                  InsightKind.overBudget || InsightKind.duplicate || InsightKind.unusual => theme.colorScheme.error,
+                  _ => theme.colorScheme.onSurfaceVariant,
+                },
+              ),
+              title: Text(i.text),
+              trailing: _onTap(context, i) == null ? null : const Icon(Icons.chevron_right, size: 18),
+              onTap: _onTap(context, i),
+            ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const Key('askAiReport'),
+              onPressed: () => app.askAssistant(_prompt()),
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('請 AI 寫月報'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _KpiRow extends StatelessWidget {
@@ -422,7 +530,7 @@ class _StatTile extends StatelessWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child, this.subtitle});
+  const _Section({super.key, required this.title, required this.child, this.subtitle});
 
   final String title;
   final String? subtitle;
@@ -552,18 +660,24 @@ class ShareRow extends StatelessWidget {
 
 /// Records matching a filter, with their total (drill-down from reports).
 class RecordsReportScreen extends StatelessWidget {
-  const RecordsReportScreen({super.key, required this.app, required this.title, required this.filter});
+  const RecordsReportScreen({super.key, required this.app, required this.title, required this.filter, this.ids});
 
   final AppState app;
   final String title;
   final TxnFilter filter;
+
+  /// Only these records (of those the filter finds).
+  final Set<String>? ids;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: app,
     builder: (context, _) {
       final l = app.view;
-      final txns = l.transactions(filter);
+      final txns = [
+        for (final t in l.transactions(filter))
+          if (ids == null || ids!.contains(t.id)) t,
+      ];
       final total = txns.fold(Decimal.zero, (s, t) => s + t.baseAmount);
       final theme = Theme.of(context);
       return Scaffold(

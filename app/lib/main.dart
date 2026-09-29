@@ -42,10 +42,7 @@ class AuraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     ThemeData theme(Brightness b) => ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF3B6E8F),
-        brightness: b,
-      ),
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3B6E8F), brightness: b),
     );
     return MaterialApp(
       title: 'Aura 記帳',
@@ -70,7 +67,6 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  var _tab = 0;
   late final AppLifecycleListener _lifecycle;
 
   @override
@@ -103,27 +99,30 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: IndexedStack(
-      index: _tab,
-      children: [
-        TransactionsScreen(app: widget.app),
-        ReportsScreen(app: widget.app),
-        AccountsScreen(app: widget.app),
-        AssistantScreen(app: widget.app),
-        SettingsScreen(app: widget.app),
-      ],
-    ),
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: _tab,
-      onDestinationSelected: (i) => setState(() => _tab = i),
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: '紀錄'),
-        NavigationDestination(icon: Icon(Icons.insights_outlined), label: '報表'),
-        NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '帳戶'),
-        NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI 助理'),
-        NavigationDestination(icon: Icon(Icons.settings_outlined), label: '設定'),
-      ],
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: widget.app.tab,
+    builder: (context, tab, _) => Scaffold(
+      body: IndexedStack(
+        index: tab,
+        children: [
+          TransactionsScreen(app: widget.app),
+          ReportsScreen(app: widget.app),
+          AccountsScreen(app: widget.app),
+          AssistantScreen(app: widget.app),
+          SettingsScreen(app: widget.app),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: tab,
+        onDestinationSelected: (i) => widget.app.tab.value = i,
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: '紀錄'),
+          NavigationDestination(icon: Icon(Icons.insights_outlined), label: '報表'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '帳戶'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI 助理'),
+          NavigationDestination(icon: Icon(Icons.settings_outlined), label: '設定'),
+        ],
+      ),
     ),
   );
 }

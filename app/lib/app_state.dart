@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:aura_ai/aura_ai.dart';
@@ -309,6 +310,16 @@ class AppState extends ChangeNotifier {
 
   late final assistant = AssistantSession(this);
 
+  /// The bottom tab showing; screens switch it, e.g. to the assistant.
+  final tab = ValueNotifier(0);
+  static const assistantTab = 3;
+
+  /// Asks the assistant [question] and shows its tab.
+  void askAssistant(String question) {
+    if (aiReady) unawaited(assistant.send(question));
+    tab.value = assistantTab;
+  }
+
   Future<void> load() async {
     await cloud.load();
     aiConfig = await settings.loadConfig();
@@ -605,6 +616,38 @@ class AppState extends ChangeNotifier {
   /// Stops suggesting [c].
   void dismissCandidate(RecurringCandidate c) =>
       write((l) => l.setMeta(_metaDismissed, jsonEncode([..._dismissedCandidates, c.key])));
+
+  static const _metaNotDuplicate = 'duplicates.dismissed';
+
+  Set<String> get _notDuplicates => switch (ledger.meta(_metaNotDuplicate)) {
+    final String s => {...(jsonDecode(s) as List).cast<String>()},
+    _ => {},
+  };
+
+  /// The month's highlights (see [monthlyInsights]).
+  List<Insight> insightsFor(Period month) =>
+      monthlyInsights(view, month, today: clock(), dismissedDuplicates: _notDuplicates);
+
+  List<List<Txn>>? _duplicates;
+  int _duplicatesRevision = -1;
+
+  /// Possible double entries in the last two weeks.
+  List<List<Txn>> get recentDuplicates {
+    if (_duplicates == null || _duplicatesRevision != revision) {
+      final d = clock();
+      _duplicates = possibleDuplicates(
+        view,
+        Period(DateTime(d.year, d.month, d.day - 13), DateTime(d.year, d.month, d.day)),
+        dismissed: _notDuplicates,
+      );
+      _duplicatesRevision = revision;
+    }
+    return _duplicates!;
+  }
+
+  /// The user says [pair] are two real charges.
+  void notDuplicate(List<Txn> pair) =>
+      write((l) => l.setMeta(_metaNotDuplicate, jsonEncode([..._notDuplicates, duplicateKey(pair)])));
 
   /// Adds or changes a budget; returns the user-facing error, if any.
   String? setBudget(Budget budget) => write((l) => l.setBudget(budget));
