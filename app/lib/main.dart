@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app_state.dart';
 import 'screens/accounts_screen.dart';
 import 'screens/assistant_screen.dart';
+import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'services/ai_settings_store.dart';
@@ -68,6 +69,7 @@ class _HomeShellState extends State<HomeShell> {
       index: _tab,
       children: [
         TransactionsScreen(app: widget.app),
+        ReportsScreen(app: widget.app),
         AccountsScreen(app: widget.app),
         AssistantScreen(app: widget.app),
         SettingsScreen(app: widget.app),
@@ -78,6 +80,7 @@ class _HomeShellState extends State<HomeShell> {
       onDestinationSelected: (i) => setState(() => _tab = i),
       destinations: const [
         NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: '紀錄'),
+        NavigationDestination(icon: Icon(Icons.insights_outlined), label: '報表'),
         NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '帳戶'),
         NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI 助理'),
         NavigationDestination(icon: Icon(Icons.settings_outlined), label: '設定'),

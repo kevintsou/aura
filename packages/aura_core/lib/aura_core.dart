@@ -9,3 +9,4 @@ export 'src/interop/cwmoney/csv_reader.dart';
 export 'src/interop/cwmoney/importer.dart';
 export 'src/ledger.dart';
 export 'src/model.dart';
+export 'src/reports.dart';
