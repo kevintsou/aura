@@ -51,3 +51,74 @@ String decodeBig5Hkscs(List<int> bytes) {
   }
   return out.toString();
 }
+
+Map<int, int>? _single;
+Map<int, Map<int, int>>? _pairs;
+
+/// Builds the reverse table. Twelve characters have two codes (十 is
+/// 0xA2CC and 0xA451). The higher one wins, except for the fullwidth
+/// slashes, which CWMoney writes as 0xA1FE and 0xA240 (checked against
+/// real exports).
+void _loadReverse() {
+  if (_single != null) return;
+  final table = _loadTable();
+  final single = <int, int>{};
+  final pairs = <int, Map<int, int>>{};
+  for (var lead = 0x81; lead <= 0xFE; lead++) {
+    for (var t = 0; t < _trailsPerLead; t++) {
+      final slot = ((lead - 0x81) * _trailsPerLead + t) * 2;
+      final first = table[slot], second = table[slot + 1];
+      if (first == 0) continue;
+      final trail = t < 63 ? 0x40 + t : 0xA1 + t - 63;
+      final code = lead << 8 | trail;
+      if (second == 0) {
+        single[first] = code;
+      } else {
+        pairs.putIfAbsent(first, () => {})[second] = code;
+      }
+    }
+  }
+  single
+    ..[0xFF0F] = 0xA1FE // ／
+    ..[0xFF3C] = 0xA240; // ＼
+  _single = single;
+  _pairs = pairs;
+}
+
+/// Encodes [text] as Big5-HKSCS. Characters it cannot represent (emoji,
+/// for one) become `?`; [unmappable] counts them.
+Uint8List encodeBig5Hkscs(String text, {void Function(int codeUnit)? unmappable}) {
+  _loadReverse();
+  final out = BytesBuilder(copy: false);
+  final units = text.codeUnits;
+  for (var i = 0; i < units.length; i++) {
+    final u = units[i];
+    if (u < 0x80) {
+      out.addByte(u);
+      continue;
+    }
+    // Two-unit sequences first: surrogate pairs and HKSCS compositions.
+    if (i + 1 < units.length) {
+      final code = _pairs![u]?[units[i + 1]];
+      if (code != null) {
+        out
+          ..addByte(code >> 8)
+          ..addByte(code & 0xFF);
+        i++;
+        continue;
+      }
+    }
+    final code = _single![u];
+    if (code != null) {
+      out
+        ..addByte(code >> 8)
+        ..addByte(code & 0xFF);
+      continue;
+    }
+    unmappable?.call(u);
+    out.addByte(0x3F);
+    // A lone half of a surrogate pair stands for one character.
+    if (u >= 0xD800 && u < 0xDC00 && i + 1 < units.length && units[i + 1] >= 0xDC00 && units[i + 1] < 0xE000) i++;
+  }
+  return out.takeBytes();
+}
