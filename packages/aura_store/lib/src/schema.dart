@@ -69,6 +69,11 @@ const migrations = <String>[
     PRIMARY KEY (txn_id, position)
   );
   ''',
+  // 2: known account balances (BalanceAnchor).
+  '''
+  ALTER TABLE accounts ADD COLUMN anchor_amount TEXT;  -- exact decimal
+  ALTER TABLE accounts ADD COLUMN anchor_date TEXT;    -- YYYY-MM-DD
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

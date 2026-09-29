@@ -60,8 +60,8 @@ void main() {
       db.transactions().map(_fields).toList(),
       _imported.transactions().map(_fields).toList(),
     );
-    expect(db.accounts.map((a) => (a.id, a.name, a.type, a.currency)),
-        _imported.accounts.map((a) => (a.id, a.name, a.type, a.currency)));
+    expect(db.accounts.map((a) => (a.id, a.name, a.type, a.currency, a.anchor)),
+        _imported.accounts.map((a) => (a.id, a.name, a.type, a.currency, a.anchor)));
     expect(db.categories.map((c) => (c.id, c.kind, c.name, c.parentId)),
         _imported.categories.map((c) => (c.id, c.kind, c.name, c.parentId)));
     expect(db.projects.map((p) => p.name), _imported.projects.map((p) => p.name));
@@ -145,6 +145,37 @@ void main() {
     expect(db.accounts, hasLength(_imported.accounts.length));
   });
 
+  group('balances', () {
+    final today = DateTime(2026, 9, 29);
+    String savings(LedgerReader l) =>
+        l.accounts.firstWhere((a) => a.name == '活存-測試').id;
+
+    test('flows match the in-memory ledger', () {
+      expect(
+        computeBalances(db, today: today).map((k, v) => MapEntry(k, v.current)),
+        computeBalances(_imported, today: today).map((k, v) => MapEntry(k, v.current)),
+      );
+    });
+
+    test('anchors are stored exactly and survive replaceAll', () {
+      final anchor = BalanceAnchor(amount: Decimal.parse('-1234.56'), date: today);
+      db.setBalanceAnchor(savings(db), anchor);
+      expect(db.account(savings(db))!.anchor, anchor);
+      expect(computeBalances(db, today: today)[savings(db)]!.current, anchor.amount);
+
+      final copy = SqliteLedger.inMemory()..replaceAll(db);
+      addTearDown(copy.close);
+      expect(copy.account(savings(copy))!.anchor, anchor);
+
+      db.setBalanceAnchor(savings(db), null);
+      expect(db.account(savings(db))!.anchor, isNull);
+    });
+
+    test('rejects an unknown account', () {
+      expect(() => db.setBalanceAnchor('nope', null), throwsArgumentError);
+    });
+  });
+
   test('stores meta values', () {
     db.setMeta('import.file', 'a.csv');
     db.setMeta('import.file', 'b.csv');
@@ -171,6 +202,28 @@ void main() {
         reopened.transactions().map(_fields).toList(),
         _imported.transactions().map(_fields).toList(),
       );
+    });
+
+    test('upgrades a version 1 database without losing data', () {
+      final path = '${dir.path}/v1.db';
+      final v1 = sqlite3.open(path)
+        ..execute(migrations.first)
+        ..userVersion = 1
+        ..execute(
+          "INSERT INTO accounts (id, name, type, currency, sort) "
+          "VALUES ('a1', '現金', 'cash', 'TWD', 0)",
+        );
+      v1.close();
+      final upgraded = SqliteLedger.open(path);
+      addTearDown(upgraded.close);
+      expect(upgraded.schemaVersion, migrations.length);
+      expect(upgraded.account('a1')!.name, '現金');
+      expect(upgraded.account('a1')!.anchor, isNull);
+      upgraded.setBalanceAnchor(
+        'a1',
+        BalanceAnchor(amount: Decimal.fromInt(100), date: DateTime(2026, 1, 1)),
+      );
+      expect(upgraded.account('a1')!.anchor!.amount, Decimal.fromInt(100));
     });
 
     test('refuses a database from a newer app version', () {

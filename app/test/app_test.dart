@@ -6,6 +6,7 @@ import 'package:aura/services/ai_settings_store.dart';
 import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
 import 'package:aura_store/aura_store.dart';
+import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -183,5 +184,85 @@ void main() {
     expect(error, contains('HTML'));
     expect(app.ledger.count(), 11);
     expect(app.importedFileName, 'sample.csv');
+  });
+
+  group('opening balances', () {
+    Future<AppState> imported(WidgetTester tester) async {
+      final app = await _app();
+      await tester.runAsync(() => app.importCwmoney(_sample, 'sample.csv'));
+      return app;
+    }
+
+    testWidgets('accounts list totals and flags unset balances', (tester) async {
+      _tallScreen(tester);
+      await tester.pumpWidget(AuraApp(app: await imported(tester)));
+      await tester.tap(find.text('帳戶'));
+      await tester.pumpAndSettle();
+      // TWD accounts: 2,880 − 25,645 − 1,865 + 100,000 − 1,874.5
+      expect(find.text('NT\$73,495.5'), findsOneWidget);
+      expect(find.text('外幣：-USD 1,000、-JPY 10,000'), findsOneWidget);
+      expect(find.textContaining('有 7 個帳戶還沒設定餘額'), findsOneWidget);
+    });
+
+    testWidgets("entering today's balance derives the opening balance", (tester) async {
+      _tallScreen(tester);
+      final app = await imported(tester);
+      await tester.pumpWidget(AuraApp(app: app));
+      await tester.tap(find.text('帳戶'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('活存-測試'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('balanceAmount')), '200,000');
+      await tester.pump();
+      expect(find.text('NT\$225,645'), findsOneWidget); // opening preview
+      expect(find.text('NT\$200,000'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('saveBalance')));
+      await tester.pumpAndSettle();
+      expect(find.text('期初 NT\$225,645'), findsOneWidget);
+      expect(find.textContaining('有 6 個帳戶還沒設定餘額'), findsOneWidget);
+      final savings = app.ledger.accounts.firstWhere((a) => a.name == '活存-測試');
+      expect(savings.anchor!.date, DateTime(2026, 9, 29));
+    });
+
+    testWidgets('an opening balance can be entered directly', (tester) async {
+      _tallScreen(tester);
+      final app = await imported(tester);
+      await tester.pumpWidget(AuraApp(app: app));
+      await tester.tap(find.text('帳戶'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('活存-測試'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('期初'));
+      await tester.enterText(find.byKey(const Key('balanceAmount')), '1000');
+      await tester.pump();
+      expect(
+        tester.widget<Text>(find.descendant(of: find.byKey(const Key('previewCurrent')), matching: find.byType(Text)).last).data,
+        '-NT\$24,645',
+      );
+      await tester.tap(find.byKey(const Key('saveBalance')));
+      await tester.pumpAndSettle();
+      final savings = app.ledger.accounts.firstWhere((a) => a.name == '活存-測試');
+      expect(savings.anchor!.date, DateTime(2026, 9, 20)); // day before first record
+    });
+  });
+
+  test('re-importing keeps balances the new file can still support', () async {
+    final app = await _app(ledger: SqliteLedger.inMemory());
+    addTearDown(app.ledger.close);
+    await app.importCwmoney(_sample, 'sample.csv');
+    String id(String name) => app.ledger.accounts.firstWhere((a) => a.name == name).id;
+    final today = BalanceAnchor(amount: Decimal.fromInt(200000), date: DateTime(2026, 9, 29));
+    final ancient = BalanceAnchor(amount: Decimal.fromInt(1), date: DateTime(2020, 1, 1));
+    app.setBalanceAnchor(id('活存-測試'), today);
+    app.setBalanceAnchor(id('現金'), ancient);
+
+    await app.importCwmoney(_sample, 'sample.csv');
+    expect(app.anchorsKept, ['活存-測試']);
+    expect(app.anchorsDropped, ['現金']);
+    expect(app.ledger.account(id('活存-測試'))!.anchor, today);
+    expect(app.ledger.account(id('現金'))!.anchor, isNull);
+    expect(app.balances[id('活存-測試')]!.current, Decimal.fromInt(200000));
   });
 }

@@ -49,8 +49,11 @@ class _OverviewTool extends AuraTool {
   final spec = const ToolSpec(
     name: 'get_ledger_overview',
     description:
-        'Returns the ledger structure: date range, accounts, the category '
-        'tree, projects. Call this first to learn valid names.',
+        'Returns the ledger structure: date range, accounts with their '
+        'current balances, the category tree, projects. Call this first to '
+        'learn valid names. Balances are in each account\'s own currency; '
+        'balance_known=false means the user never set a real balance, so '
+        'that balance only reflects recorded activity and may be wrong.',
     parameters: {'type': 'object', 'properties': <String, Object?>{}},
   );
 
@@ -58,6 +61,7 @@ class _OverviewTool extends AuraTool {
   Future<Map<String, Object?>> run(Map<String, Object?> args) async {
     final l = ctx.ledger;
     final all = l.transactions();
+    final balances = computeBalances(l, today: clock());
     Map<String, List<String>> tree(TxnKind kind) {
       final mains = l.categories.where((c) => c.kind == kind && c.parentId == null);
       return {
@@ -74,7 +78,13 @@ class _OverviewTool extends AuraTool {
       if (all.isNotEmpty) 'last_date': _fmtDate(all.first.date),
       'accounts': [
         for (final a in l.accounts)
-          {'name': a.name, 'type': a.type.name, 'currency': a.currency},
+          {
+            'name': a.name,
+            'type': a.type.name,
+            'currency': a.currency,
+            'balance': _num(balances[a.id]!.current),
+            'balance_known': balances[a.id]!.isSet,
+          },
       ],
       'expense_categories': tree(TxnKind.expense),
       'income_categories': tree(TxnKind.income),

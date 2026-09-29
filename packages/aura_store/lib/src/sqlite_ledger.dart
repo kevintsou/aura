@@ -43,6 +43,12 @@ class SqliteLedger implements LedgerStore {
           name: r['name'] as String,
           type: AccountType.values.byName(r['type'] as String),
           currency: r['currency'] as String,
+          anchor: r['anchor_amount'] == null
+              ? null
+              : BalanceAnchor(
+                  amount: Decimal.parse(r['anchor_amount'] as String),
+                  date: _parseDate(r['anchor_date'] as String),
+                ),
         ),
     };
     _categories = {
@@ -76,6 +82,42 @@ class SqliteLedger implements LedgerStore {
   Category? category(String id) => _categories[id];
   @override
   Project? project(String id) => _projects[id];
+
+  @override
+  Iterable<AccountFlow> accountFlows() => flowsOf(
+    _db
+        .select(
+          'SELECT kind, date, account_id, to_account_id, amount, to_amount '
+          'FROM txns',
+        )
+        .map(
+          (r) => Txn(
+            id: '',
+            kind: TxnKind.values.byName(r['kind'] as String),
+            date: _parseDate(r['date'] as String),
+            accountId: r['account_id'] as String?,
+            toAccountId: r['to_account_id'] as String?,
+            amount: Decimal.parse(r['amount'] as String),
+            toAmount: switch (r['to_amount']) {
+              final String s => Decimal.parse(s),
+              _ => null,
+            },
+            baseAmount: Decimal.zero,
+          ),
+        ),
+  );
+
+  @override
+  void setBalanceAnchor(String accountId, BalanceAnchor? anchor) {
+    _db.execute(
+      'UPDATE accounts SET anchor_amount = ?, anchor_date = ? WHERE id = ?',
+      [anchor?.amount.toString(), anchor == null ? null : formatIsoDate(anchor.date), accountId],
+    );
+    if (_db.updatedRows == 0) {
+      throw ArgumentError.value(accountId, 'accountId');
+    }
+    _loadReferenceData();
+  }
 
   @override
   String? meta(String key) =>
@@ -277,9 +319,18 @@ class SqliteLedger implements LedgerStore {
     }
 
     each(
-      'INSERT INTO accounts (id, name, type, currency, sort) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO accounts (id, name, type, currency, sort, anchor_amount, '
+      'anchor_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
       source.accounts,
-      (a, i) => [a.id, a.name, a.type.name, a.currency, i],
+      (a, i) => [
+        a.id,
+        a.name,
+        a.type.name,
+        a.currency,
+        i,
+        a.anchor?.amount.toString(),
+        a.anchor == null ? null : formatIsoDate(a.anchor!.date),
+      ],
     );
     each(
       'INSERT INTO projects (id, name, sort) VALUES (?, ?, ?)',

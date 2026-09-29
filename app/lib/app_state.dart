@@ -32,6 +32,29 @@ class AppState extends ChangeNotifier {
   /// Bumped whenever ledger data changes, so views can drop caches.
   int revision = 0;
   CwmImportReport? lastImport;
+
+  /// Accounts whose balance survived the last import, and those whose
+  /// balance had to be dropped because the new file does not reach back
+  /// to the date the balance was set for.
+  List<String> anchorsKept = const [], anchorsDropped = const [];
+
+  Map<String, AccountBalance>? _balances;
+  int _balancesRevision = -1;
+
+  /// Per-account balances, recomputed when the ledger changes.
+  Map<String, AccountBalance> get balances {
+    if (_balances == null || _balancesRevision != revision) {
+      _balances = computeBalances(ledger, today: clock());
+      _balancesRevision = revision;
+    }
+    return _balances!;
+  }
+
+  void setBalanceAnchor(String accountId, BalanceAnchor? anchor) {
+    ledger.setBalanceAnchor(accountId, anchor);
+    revision++;
+    notifyListeners();
+  }
   String? get importedFileName => ledger.meta(_metaImportFile);
 
   AiEndpointConfig aiConfig = AiEndpointConfig.defaults;
@@ -56,6 +79,7 @@ class AppState extends ChangeNotifier {
     } on CwmFormatException catch (e) {
       return e.message;
     }
+    final (kept, dropped) = _carryOverAnchors(result.ledger);
     try {
       ledger.replaceAll(result.ledger);
     } on Exception catch (e) {
@@ -65,10 +89,44 @@ class AppState extends ChangeNotifier {
       ..setMeta(_metaImportFile, fileName)
       ..setMeta(_metaImportedAt, clock().toIso8601String());
     lastImport = result.report;
+    anchorsKept = kept;
+    anchorsDropped = dropped;
     revision++;
     assistant.reset();
     notifyListeners();
     return null;
+  }
+
+  /// Re-applies the balances the user set, matched by account name, to a
+  /// freshly imported ledger. A balance set for a day before the new file
+  /// starts cannot be used: the activity in between is missing.
+  (List<String>, List<String>) _carryOverAnchors(InMemoryLedger imported) {
+    final previous = {
+      for (final a in ledger.accounts)
+        if (a.anchor != null) a.name: a.anchor!,
+    };
+    if (previous.isEmpty) return (const [], const []);
+    final first = <String, DateTime>{};
+    for (final f in imported.accountFlows()) {
+      final d = first[f.accountId];
+      if (d == null || f.date.isBefore(d)) first[f.accountId] = f.date;
+    }
+    final kept = <String>[], dropped = <String>[];
+    for (final a in imported.accounts) {
+      final anchor = previous[a.name];
+      if (anchor == null) continue;
+      final start = first[a.id];
+      final covered =
+          start == null ||
+          !anchor.date.isBefore(start.subtract(const Duration(days: 1)));
+      if (covered) {
+        imported.setBalanceAnchor(a.id, anchor);
+        kept.add(a.name);
+      } else {
+        dropped.add(a.name);
+      }
+    }
+    return (kept, dropped);
   }
 
   Future<String?> apiKeyFor(AiPreset preset) => settings.loadApiKey(preset);

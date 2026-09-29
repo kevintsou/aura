@@ -1,5 +1,7 @@
 import 'package:decimal/decimal.dart';
 
+import 'balance.dart';
+
 /// Base currency for reports. CWMoney's 小計 column is always in this.
 const baseCurrency = 'TWD';
 
@@ -13,6 +15,7 @@ class Account {
     required this.name,
     required this.type,
     required this.currency,
+    this.anchor,
   });
 
   final String id;
@@ -21,6 +24,18 @@ class Account {
 
   /// ISO 4217 code, or `XXX` when the importer could not tell.
   final String currency;
+
+  /// A known real balance, from which opening and current balances are
+  /// derived. Null until the user sets one (CWMoney CSVs lack it).
+  final BalanceAnchor? anchor;
+
+  Account withAnchor(BalanceAnchor? anchor) => Account(
+    id: id,
+    name: name,
+    type: type,
+    currency: currency,
+    anchor: anchor,
+  );
 }
 
 /// Two-level category. A main category has no [parentId].

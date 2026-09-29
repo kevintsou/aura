@@ -1,3 +1,4 @@
+import 'balance.dart';
 import 'model.dart';
 
 /// Criteria for selecting transactions. All fields are optional and
@@ -52,6 +53,10 @@ abstract interface class LedgerReader {
 
   /// Number of transactions matching [filter].
   int count([TxnFilter filter = const TxnFilter()]);
+
+  /// Every movement of money per account, for balance calculations.
+  /// Cheaper than loading full transactions.
+  Iterable<AccountFlow> accountFlows();
 }
 
 /// A ledger that can be written and survives restarts (depending on the
@@ -60,6 +65,9 @@ abstract interface class LedgerStore implements LedgerReader {
   /// Atomically replaces every account, category, project and
   /// transaction with those of [source].
   void replaceAll(LedgerReader source);
+
+  /// Sets or clears an account's known balance.
+  void setBalanceAnchor(String accountId, BalanceAnchor? anchor);
 
   /// Small key/value settings kept with the data (e.g. last import).
   String? meta(String key);
@@ -109,6 +117,16 @@ class InMemoryLedger implements LedgerStore {
     source.projects,
     source.transactions(),
   );
+
+  @override
+  Iterable<AccountFlow> accountFlows() => flowsOf(_txns);
+
+  @override
+  void setBalanceAnchor(String accountId, BalanceAnchor? anchor) {
+    final account = _accounts[accountId];
+    if (account == null) throw ArgumentError.value(accountId, 'accountId');
+    _accounts[accountId] = account.withAnchor(anchor);
+  }
 
   @override
   String? meta(String key) => _meta[key];

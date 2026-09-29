@@ -1,6 +1,7 @@
 /// Aura ledger domain model, queries and CWMoney interop.
 library;
 
+export 'src/balance.dart';
 export 'src/interop/cwmoney/big5hkscs.dart' show decodeBig5Hkscs;
 export 'src/interop/cwmoney/csv_reader.dart';
 export 'src/interop/cwmoney/importer.dart';

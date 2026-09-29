@@ -172,6 +172,10 @@ void main() {
       expect(r['first_date'], '2026-09-18');
       expect((r['expense_categories'] as Map)['生活費'], ['早餐', '午餐']);
       expect(r['needs_review_count'], 1);
+      expect(
+        (r['accounts'] as List).firstWhere((a) => (a as Map)['name'] == '現金'),
+        allOf(containsPair('balance', 2880), containsPair('balance_known', false)),
+      );
     });
 
     test('aggregates expenses by main category, excluding transfers', () async {

@@ -125,12 +125,14 @@ Aura 會在手機上執行每一個 tool call，然後把結果加進對話再�
 {
   "today": "2026-09-29", "base_currency": "TWD", "transaction_count": 17158,
   "first_date": "2016-05-31", "last_date": "2026-09-29",
-  "accounts": [{ "name": "現金", "type": "cash", "currency": "TWD" }],
+  "accounts": [{ "name": "現金", "type": "cash", "currency": "TWD", "balance": 2880, "balance_known": true }],
   "expense_categories": { "生活費": ["早餐", "午餐"] },
   "income_categories": { "工作收入": ["薪資收入"] },
   "projects": ["旅遊支出"], "needs_review_count": 104, "invoice_items_available": true
 }
 ```
+
+`balance` 是今天的餘額，以該帳戶的幣別表示。`balance_known` 為 `false` 表示使用者還沒設定實際餘額，這個數字只是紀錄的加總，可能不準，回答時要提醒使用者。
 
 ### 5.2 `aggregate_transactions`
 

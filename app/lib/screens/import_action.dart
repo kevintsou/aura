@@ -26,6 +26,7 @@ Future<void> importCwmoneyFile(BuildContext context, AppState app) async {
                 '轉帳 ${report.transferPairs + report.fuzzyTransferPairs + report.oneSidedTransfers} 筆'
                 '${report.oneSidedTransfers > 0 ? '（其中 ${report.oneSidedTransfers} 筆只找到一邊，已標記待確認）' : ''}\n'
                 '發票 ${report.invoices} 張'
+                '${_balanceNote(app)}'
                 '${report.warnings.isEmpty ? '' : '\n\n注意：\n${report.warnings.take(5).join('\n')}'}',
       ),
       actions: [
@@ -79,4 +80,17 @@ Future<T> _withProgress<T>(BuildContext context, Future<T> work) async {
   } finally {
     navigator.pop();
   }
+}
+
+String _balanceNote(AppState app) {
+  final lines = [
+    if (app.anchorsKept.isNotEmpty)
+      '已保留 ${app.anchorsKept.length} 個帳戶的餘額設定。',
+    if (app.anchorsDropped.isNotEmpty)
+      '${app.anchorsDropped.join('、')} 的餘額設定早於這個檔案的第一筆紀錄，'
+          '已經清除，請重新設定。',
+    if (app.balances.values.any((b) => !b.isSet))
+      'CWMoney 的 CSV 沒有期初餘額，請到「帳戶」輸入各帳戶目前的實際餘額。',
+  ];
+  return lines.isEmpty ? '' : '\n\n${lines.join('\n')}';
 }
