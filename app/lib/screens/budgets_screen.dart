@@ -303,10 +303,10 @@ class BudgetDetailScreen extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 12),
-                    MonthColumns(
+                    PeriodColumns(
                       key: const Key('budgetTrend'),
-                      months: months,
-                      selected: (month.from.year, month.from.month),
+                      months: [for (final m in months) PeriodTotal(m.period, m.total)],
+                      selected: month,
                       reference: status.amount,
                       onSelect: (m) => Navigator.pushReplacement(
                         context,

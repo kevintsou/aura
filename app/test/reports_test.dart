@@ -133,4 +133,26 @@ void main() {
     await _tap(tester, find.text('午餐・便當'));
     expect(find.byKey(const Key('txnAmount')), findsOneWidget);
   });
+
+  testWidgets('weeks, the net, and spending by account', (tester) async {
+    await _openReports(tester);
+    await _tap(tester, _in(const Key('spanToggle'), '週'));
+    expect(_label(tester), '9/28–10/4');
+    expect(find.text('近 12 週支出'), findsOneWidget);
+    await _tap(tester, find.byKey(const Key('prevPeriod')));
+    expect(_label(tester), '9/21–9/27');
+
+    await _tap(tester, _in(const Key('spanToggle'), '月'));
+    expect(_label(tester), '2026 年 9 月');
+    await _tap(tester, _in(const Key('kindToggle'), '結餘'));
+    expect(find.text('近 12 個月結餘'), findsOneWidget);
+    expect(find.byKey(const Key('groupToggle')), findsNothing, reason: 'no breakdown of a net');
+    expect(find.byKey(const Key('netWorthChart')), findsOneWidget);
+
+    await _tap(tester, _in(const Key('kindToggle'), '支出'));
+    await _tap(tester, _in(const Key('groupToggle'), '帳戶'));
+    await _tap(tester, find.text('現金').last);
+    expect(find.text('現金・2026 年 9 月'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('recordsTotal'))).data, 'NT\$500');
+  });
 }

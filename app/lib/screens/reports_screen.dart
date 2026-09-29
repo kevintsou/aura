@@ -6,10 +6,13 @@ import '../app_state.dart';
 import '../format.dart';
 import '../widgets/charts.dart';
 import 'budgets_screen.dart';
+import 'category_picker.dart';
 import 'category_report_screen.dart';
+import 'transactions_screen.dart';
 
-/// Monthly or yearly overview: totals with change, a 12-month trend and
-/// where the money went, by category.
+/// Weekly, monthly or yearly overview: totals with change, a trend of the
+/// last periods, where the money went (by category, account or project)
+/// and how net worth moved.
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key, required this.app});
 
@@ -19,24 +22,60 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
+enum _Span { week, month, year }
+
+/// What the trend shows: expenses, income, or income minus expenses.
+enum _Measure { expense, income, net }
+
+enum _Group { category, account, project }
+
 class _ReportData {
-  _ReportData(LedgerReader l, this.period, this.kind)
-    : totals = totalsFor(l, period),
-      previous = totalsFor(l, period.previous),
-      months = monthlyTotals(l, kind, end: period.to),
-      categories = byCategory(l, period, kind);
+  _ReportData(AppState app, this.period, this.measure, this.group)
+    : totals = totalsFor(app.view, period),
+      previous = totalsFor(app.view, period.previous),
+      trend = period.isYear
+          ? periodTotals(app.view, _kindOf(measure), end: Period.month(period.from.year, 12))
+          : periodTotals(app.view, _kindOf(measure), end: period),
+      categories = measure == _Measure.net ? const [] : byCategory(app.view, period, _kindOf(measure)!),
+      groups = switch ((measure, group)) {
+        (_Measure.net, _) || (_, _Group.category) => const [],
+        (_, _Group.account) => byAccount(app.view, period, _kindOf(measure)!),
+        (_, _Group.project) => byProject(app.view, period, _kindOf(measure)!),
+      },
+      netWorth = period.isWeek
+          ? const []
+          : netWorthByMonth(
+              app.view,
+              {
+                for (final e in app.balances.entries)
+                  if (!app.hiddenAccountIds.contains(e.key)) e.key: e.value,
+              },
+              app.rates,
+              [for (var i = 11; i >= 0; i--) Period.month(period.to.year, period.to.month - i)],
+              today: app.clock(),
+            );
 
   final Period period;
-  final TxnKind kind;
+  final _Measure measure;
+  final _Group group;
   final Totals totals;
   final Totals previous;
-  final List<MonthTotal> months;
+  final List<PeriodTotal> trend;
   final List<CategoryTotal> categories;
+  final List<GroupTotal> groups;
+  final List<PeriodTotal> netWorth;
 }
+
+TxnKind? _kindOf(_Measure m) => switch (m) {
+  _Measure.expense => TxnKind.expense,
+  _Measure.income => TxnKind.income,
+  _Measure.net => null,
+};
 
 class _ReportsScreenState extends State<ReportsScreen> {
   Period? _period;
-  var _kind = TxnKind.expense;
+  var _measure = _Measure.expense;
+  var _group = _Group.category;
   _ReportData? _data;
   int? _revision;
 
@@ -57,17 +96,51 @@ class _ReportsScreenState extends State<ReportsScreen> {
   _ReportData _load() {
     final period = _period ??= _initialPeriod();
     final d = _data;
-    if (d == null || _revision != _app.revision || d.period != period || d.kind != _kind) {
+    if (d == null || _revision != _app.revision || d.period != period || d.measure != _measure || d.group != _group) {
       _revision = _app.revision;
-      _data = _ReportData(_app.view, period, _kind);
+      _data = _ReportData(_app, period, _measure, _group);
     }
     return _data!;
   }
 
   void _setPeriod(Period p) => setState(() => _period = p);
 
-  String _periodLabel(Period p) =>
-      p.isYear ? '${p.from.year} 年' : '${p.from.year} 年 ${p.from.month} 月';
+  _Span _spanOf(Period p) => p.isYear
+      ? _Span.year
+      : p.isWeek
+      ? _Span.week
+      : _Span.month;
+
+  void _setSpan(_Span span) {
+    final p = _period!;
+    // Keep roughly the same place in time: the period's last day.
+    final anchor = p.to.isAfter(_app.clock()) ? _app.clock() : p.to;
+    _setPeriod(switch (span) {
+      _Span.week => Period.week(anchor),
+      _Span.month => Period.month(p.to.year, p.to.month),
+      _Span.year => Period.year(p.from.year),
+    });
+  }
+
+  static String periodLabel(Period p) {
+    final f = p.from, t = p.to;
+    if (p.isYear) return '${f.year} 年';
+    if (p.isWeek) return '${f.month}/${f.day}–${t.month}/${t.day}';
+    return '${f.year} 年 ${f.month} 月';
+  }
+
+  String _trendTitle(Period p, String what) => switch (_spanOf(p)) {
+    _Span.year => '${p.from.year} 年每月$what',
+    _Span.month => '近 12 個月$what',
+    _Span.week => '近 12 週$what',
+  };
+
+  void _openRecords(String title, TxnFilter filter) => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => RecordsReportScreen(app: _app, title: title, filter: filter),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -75,7 +148,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     builder: (context, _) {
       final data = _load();
       final p = data.period;
-      final kindLabel = _kind == TxnKind.expense ? '支出' : '收入';
+      final what = switch (_measure) {
+        _Measure.expense => '支出',
+        _Measure.income => '收入',
+        _Measure.net => '結餘',
+      };
+      final kind = _kindOf(_measure);
+      final span = _spanOf(p);
       return Scaffold(
         appBar: AppBar(
           title: const Text('報表'),
@@ -85,10 +164,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => BudgetsScreen(
-                    app: _app,
-                    month: p.isYear ? null : p,
-                  ),
+                  builder: (_) => BudgetsScreen(app: _app, month: p.isYear || p.isWeek ? null : p),
                 ),
               ),
               icon: const Icon(Icons.savings_outlined),
@@ -101,15 +177,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
           children: [
             Row(
               children: [
-                SegmentedButton<bool>(
+                SegmentedButton<_Span>(
+                  key: const Key('spanToggle'),
+                  showSelectedIcon: false,
                   segments: const [
-                    ButtonSegment(value: false, label: Text('月')),
-                    ButtonSegment(value: true, label: Text('年')),
+                    ButtonSegment(value: _Span.week, label: Text('週')),
+                    ButtonSegment(value: _Span.month, label: Text('月')),
+                    ButtonSegment(value: _Span.year, label: Text('年')),
                   ],
-                  selected: {p.isYear},
-                  onSelectionChanged: (s) => _setPeriod(
-                    s.single ? Period.year(p.from.year) : Period.month(p.from.year, p.isYear ? p.to.month : p.from.month),
-                  ),
+                  selected: {span},
+                  onSelectionChanged: (s) => _setSpan(s.single),
                 ),
                 const Spacer(),
                 IconButton(
@@ -118,7 +195,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   icon: const Icon(Icons.chevron_left),
                   onPressed: () => _setPeriod(p.previous),
                 ),
-                Text(_periodLabel(p), key: const Key('periodLabel'), style: Theme.of(context).textTheme.titleMedium),
+                Text(periodLabel(p), key: const Key('periodLabel'), style: Theme.of(context).textTheme.titleMedium),
                 IconButton(
                   key: const Key('nextPeriod'),
                   tooltip: '下一期',
@@ -128,54 +205,103 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _KpiRow(data: data, periodWord: p.isYear ? '去年' : '上月'),
+            _KpiRow(
+              data: data,
+              periodWord: switch (span) {
+                _Span.week => '上週',
+                _Span.month => '上月',
+                _Span.year => '去年',
+              },
+            ),
             const SizedBox(height: 16),
-            SegmentedButton<TxnKind>(
+            SegmentedButton<_Measure>(
               key: const Key('kindToggle'),
               segments: const [
-                ButtonSegment(value: TxnKind.expense, label: Text('支出')),
-                ButtonSegment(value: TxnKind.income, label: Text('收入')),
+                ButtonSegment(value: _Measure.expense, label: Text('支出')),
+                ButtonSegment(value: _Measure.income, label: Text('收入')),
+                ButtonSegment(value: _Measure.net, label: Text('結餘')),
               ],
-              selected: {_kind},
-              onSelectionChanged: (s) => setState(() => _kind = s.single),
+              selected: {_measure},
+              onSelectionChanged: (s) => setState(() => _measure = s.single),
             ),
             const SizedBox(height: 16),
             _Section(
-              title: p.isYear ? '${p.from.year} 年每月$kindLabel' : '近 12 個月$kindLabel',
-              subtitle: p.isYear ? '點長條看那個月' : '點長條切換月份',
-              child: MonthColumns(
+              title: _trendTitle(p, what),
+              subtitle: p.isYear ? '點長條看那個月' : '點長條切換到那一期',
+              child: PeriodColumns(
                 key: const Key('trendChart'),
-                months: data.months,
-                selected: p.isYear ? null : (p.from.year, p.from.month),
+                months: data.trend,
+                selected: p.isYear ? null : p,
                 onSelect: (m) => _setPeriod(m.period),
               ),
             ),
-            const SizedBox(height: 16),
-            _Section(
-              title: '$kindLabel分類',
-              subtitle: data.categories.isEmpty
-                  ? null
-                  : '${_periodLabel(p)}共 ${formatMoney(_kind == TxnKind.expense ? data.totals.expense : data.totals.income)}',
-              child: data.categories.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(child: Text('${_periodLabel(p)}沒有$kindLabel紀錄')),
-                    )
-                  : _CategoryList(
-                      rows: data.categories,
-                      onTap: (row) => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CategoryReportScreen(
-                            app: _app,
-                            period: p,
-                            kind: _kind,
-                            main: row.category,
+            if (kind != null) ...[
+              const SizedBox(height: 16),
+              _Section(
+                title: '$what來源',
+                subtitle:
+                    '${periodLabel(p)}共 ${formatMoney(kind == TxnKind.expense ? data.totals.expense : data.totals.income)}',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SegmentedButton<_Group>(
+                      key: const Key('groupToggle'),
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: _Group.category, label: Text('分類')),
+                        ButtonSegment(value: _Group.account, label: Text('帳戶')),
+                        ButtonSegment(value: _Group.project, label: Text('專案')),
+                      ],
+                      selected: {_group},
+                      onSelectionChanged: (s) => setState(() => _group = s.single),
+                    ),
+                    const SizedBox(height: 8),
+                    if (data.categories.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: Text('${periodLabel(p)}沒有$what紀錄')),
+                      )
+                    else if (_group == _Group.category)
+                      _CategoryList(
+                        rows: data.categories,
+                        onTap: (row) => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CategoryReportScreen(app: _app, period: p, kind: kind, main: row.category),
+                          ),
+                        ),
+                      )
+                    else
+                      _GroupList(
+                        rows: data.groups,
+                        onTap: (g) => _openRecords(
+                          '${g.label}・${periodLabel(p)}',
+                          TxnFilter(
+                            from: p.from,
+                            to: p.to,
+                            kinds: {kind},
+                            accountIds: _group == _Group.account && g.id != null ? {g.id!} : null,
+                            projectIds: _group == _Group.project && g.id != null ? {g.id!} : null,
                           ),
                         ),
                       ),
-                    ),
-            ),
+                  ],
+                ),
+              ),
+            ],
+            if (data.netWorth.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _Section(
+                title: '淨資產走勢',
+                subtitle: '每月底的淨資產，外幣用目前的匯率換算',
+                child: PeriodColumns(
+                  key: const Key('netWorthChart'),
+                  months: data.netWorth,
+                  selected: data.netWorth.last.period,
+                  onSelect: (_) {},
+                ),
+              ),
+            ],
           ],
         ),
       );
@@ -217,12 +343,7 @@ class _KpiRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _StatTile(
-            key: const Key('kpiNet'),
-            label: '結餘',
-            value: t.net,
-            periodWord: periodWord,
-          ),
+          child: _StatTile(key: const Key('kpiNet'), label: '結餘', value: t.net, periodWord: periodWord),
         ),
       ],
     );
@@ -340,7 +461,26 @@ class _CategoryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final max = rows.fold(Decimal.zero, (m, r) => r.total > m ? r.total : m);
-    return Column(children: [for (final r in rows) CategoryRow(row: r, max: max, onTap: () => onTap(r))]);
+    return Column(
+      children: [for (final r in rows) CategoryRow(row: r, max: max, onTap: () => onTap(r))],
+    );
+  }
+}
+
+class _GroupList extends StatelessWidget {
+  const _GroupList({required this.rows, required this.onTap});
+
+  final List<GroupTotal> rows;
+  final ValueChanged<GroupTotal> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final max = rows.fold(Decimal.zero, (m, r) => r.total > m ? r.total : m);
+    return Column(
+      children: [
+        for (final g in rows) ShareRow(label: g.label, total: g.total, share: g.share, max: max, onTap: () => onTap(g)),
+      ],
+    );
   }
 }
 
@@ -355,6 +495,28 @@ class CategoryRow extends StatelessWidget {
   final String? label;
 
   @override
+  Widget build(BuildContext context) =>
+      ShareRow(label: label ?? row.category?.name ?? '未分類', total: row.total, share: row.share, max: max, onTap: onTap);
+}
+
+/// Name, amount and share as text, with a single-hue bar of the share.
+class ShareRow extends StatelessWidget {
+  const ShareRow({
+    super.key,
+    required this.label,
+    required this.total,
+    required this.share,
+    required this.max,
+    this.onTap,
+  });
+
+  final String label;
+  final Decimal total;
+  final double share;
+  final Decimal max;
+  final VoidCallback? onTap;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
@@ -366,12 +528,12 @@ class CategoryRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text(label ?? row.category?.name ?? '未分類')),
-                Text(formatMoney(row.total.round(scale: 0)), style: const TextStyle(fontWeight: FontWeight.w600)),
+                Expanded(child: Text(label)),
+                Text(formatMoney(total.round(scale: 0)), style: const TextStyle(fontWeight: FontWeight.w600)),
                 SizedBox(
                   width: 52,
                   child: Text(
-                    '${row.share.toStringAsFixed(1)}%',
+                    '${share.toStringAsFixed(1)}%',
                     textAlign: TextAlign.right,
                     style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -380,10 +542,54 @@ class CategoryRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            ShareBar(fraction: fractionOf(row.total, max)),
+            ShareBar(fraction: fractionOf(total, max)),
           ],
         ),
       ),
     );
   }
+}
+
+/// Records matching a filter, with their total (drill-down from reports).
+class RecordsReportScreen extends StatelessWidget {
+  const RecordsReportScreen({super.key, required this.app, required this.title, required this.filter});
+
+  final AppState app;
+  final String title;
+  final TxnFilter filter;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: app,
+    builder: (context, _) {
+      final l = app.view;
+      final txns = l.transactions(filter);
+      final total = txns.fold(Decimal.zero, (s, t) => s + t.baseAmount);
+      final theme = Theme.of(context);
+      return Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text('${txns.length} 筆', style: theme.textTheme.bodyMedium),
+            Text(formatMoney(total), key: const Key('recordsTotal'), style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 16),
+            for (final t in txns)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  [
+                    if (t.categoryId != null) categoryLabel(l, t.categoryId),
+                    t.invoice?.sellerName ?? t.note,
+                  ].whereType<String>().join('・'),
+                ),
+                subtitle: Text(formatDate(t.date)),
+                trailing: Text(formatMoney(t.baseAmount)),
+                onTap: () => openTxnEditor(context, app, t),
+              ),
+          ],
+        ),
+      );
+    },
+  );
 }

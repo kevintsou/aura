@@ -75,10 +75,11 @@ double niceStep(double max) {
   return 10 * mag;
 }
 
-/// Monthly columns in the emphasis form: the selected month in the
-/// accent, the others in gray. Tap a column to select its month.
-class MonthColumns extends StatelessWidget {
-  const MonthColumns({
+/// Columns per period (weeks, months or years) in the emphasis form: the
+/// selected period in the accent, the others in gray. Tap a column to
+/// select its period.
+class PeriodColumns extends StatelessWidget {
+  const PeriodColumns({
     super.key,
     required this.months,
     required this.selected,
@@ -88,15 +89,15 @@ class MonthColumns extends StatelessWidget {
     this.referenceLabel = '預算',
   });
 
-  final List<MonthTotal> months;
+  final List<PeriodTotal> months;
 
   /// A level to compare against (a budget), drawn as a dashed line.
   final Decimal? reference;
   final String referenceLabel;
 
-  /// Year and month of the highlighted column, if it is on the chart.
-  final (int, int)? selected;
-  final ValueChanged<MonthTotal> onSelect;
+  /// The highlighted column's period, if it is on the chart.
+  final Period? selected;
+  final ValueChanged<PeriodTotal> onSelect;
   final double height;
 
   @override
@@ -143,8 +144,8 @@ class _ColumnsPainter extends CustomPainter {
     this.referenceColor = const Color(0xFF000000),
   });
 
-  final List<MonthTotal> months;
-  final (int, int)? selected;
+  final List<PeriodTotal> months;
+  final Period? selected;
   final ChartColors colors;
   final double? reference;
   final String referenceLabel;
@@ -202,7 +203,7 @@ class _ColumnsPainter extends CustomPainter {
     final slot = _slot(size);
     final barW = math.min(24.0, slot * 0.6);
     for (final (i, m) in months.indexed) {
-      final isSel = selected == (m.year, m.month);
+      final isSel = selected == m.period;
       final cx = _axisWidth + slot * i + slot / 2;
       final v = m.total.toDouble();
       if (v != 0) {
@@ -214,8 +215,7 @@ class _ColumnsPainter extends CustomPainter {
         // With nothing selected every column is the one series, in the accent.
         canvas.drawRRect(rr, Paint()..color = isSel || selected == null ? colors.accent : colors.muted);
       }
-      // Month numbers; the year under the first column and each January.
-      final label = _text(m.month == 1 || i == 0 ? '${m.month}\n${m.year}' : '${m.month}');
+      final label = _text(_label(m.period, i == 0 ? null : months[i - 1].period));
       label.paint(canvas, Offset(cx - label.width / 2, size.height - _labelHeight + 4));
       if (isSel && v != 0 && !(reference != null && (y(v) - y(reference!)).abs() < 14)) {
         // The highlighted column's value sits on its cap, in text ink.
@@ -254,8 +254,8 @@ class _ColumnsPainter extends CustomPainter {
         CustomPainterSemantics(
           rect: Rect.fromLTWH(_axisWidth + slot * i, 0, slot, size.height),
           properties: SemanticsProperties(
-            label: '${m.year}年${m.month}月 ${formatMoney(m.total)}',
-            selected: selected == (m.year, m.month),
+            label: '${_spoken(m.period)} ${formatMoney(m.total)}',
+            selected: selected == m.period,
             textDirection: TextDirection.ltr,
           ),
         ),
@@ -268,6 +268,23 @@ class _ColumnsPainter extends CustomPainter {
 
   @override
   bool shouldRebuildSemantics(_ColumnsPainter old) => shouldRepaint(old);
+}
+
+/// Short axis label: month numbers with the year under the first column
+/// and each January; week start days with the month under the first and
+/// at each new month; years.
+String _label(Period p, Period? before) {
+  final f = p.from;
+  if (p.isYear) return '${f.year}';
+  if (p.isWeek) return before == null || before.from.month != f.month ? '${f.day}\n${f.month}月' : '${f.day}';
+  return before == null || f.month == 1 ? '${f.month}\n${f.year}' : '${f.month}';
+}
+
+String _spoken(Period p) {
+  final f = p.from;
+  if (p.isYear) return '${f.year}年';
+  if (p.isWeek) return '${f.year}年${f.month}月${f.day}日那週';
+  return '${f.year}年${f.month}月';
 }
 
 /// One horizontal magnitude bar (single hue), for ranked lists.
