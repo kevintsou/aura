@@ -1,14 +1,15 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
-/// Where backup files go and come from: the platform's file dialogs, so
-/// users can pick the Files app, Google Drive, iCloud Drive and so on.
+/// Files the user saves or opens (backups, CWMoney exports): the
+/// platform's file dialogs, so users can pick the Files app, Google
+/// Drive, iCloud Drive and so on.
 abstract interface class BackupFiles {
   /// False when the user cancelled.
   Future<bool> save(String fileName, Uint8List bytes);
 
   /// Null when the user cancelled.
-  Future<({String name, Uint8List bytes})?> pick();
+  Future<({String name, Uint8List bytes})?> pick({String title = '選擇備份檔'});
 }
 
 class DeviceBackupFiles implements BackupFiles {
@@ -25,8 +26,8 @@ class DeviceBackupFiles implements BackupFiles {
   }
 
   @override
-  Future<({String name, Uint8List bytes})?> pick() async {
-    final file = await FilePicker.pickFile(dialogTitle: '選擇備份檔');
+  Future<({String name, Uint8List bytes})?> pick({String title = '選擇備份檔'}) async {
+    final file = await FilePicker.pickFile(dialogTitle: title);
     if (file == null) return null;
     return (name: file.name, bytes: await file.readAsBytes());
   }

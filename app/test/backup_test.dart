@@ -28,7 +28,7 @@ class _FakeFiles implements BackupFiles {
   }
 
   @override
-  Future<({String name, Uint8List bytes})?> pick() async => toPick;
+  Future<({String name, Uint8List bytes})?> pick({String title = ''}) async => toPick;
 }
 
 var _now = DateTime(2026, 9, 29, 21, 30);

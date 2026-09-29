@@ -127,6 +127,25 @@ void main() {
     expect(db.accounts, isEmpty);
   });
 
+  test('stores a CWMoney merge, with fee links and balances intact', () {
+    final bytes = File('../aura_core/test/fixtures/sample_cwmoney.csv').readAsBytesSync();
+    // The records of 9/18–9/23 only: the header plus the last 8 records.
+    final crlf = [for (var i = 0; i + 1 < bytes.length; i++) if (bytes[i] == 0x0D && bytes[i + 1] == 0x0A) i];
+    final older = [...bytes.sublist(0, crlf[0] + 2), ...bytes.sublist(crlf[6] + 2)];
+    db.replaceAll(importCwmoneyCsv(older).ledger);
+    final cash = db.accounts.firstWhere((a) => a.name == '現金');
+    db.setBalanceAnchor(cash.id, BalanceAnchor(amount: Decimal.fromInt(1000), date: DateTime(2026, 9, 20)));
+
+    final plan = planCwmoneyMerge(db, _imported);
+    expect(plan.newTxns, hasLength(5));
+    db.replaceAll(plan.applyTo(db));
+    expect(db.count(), _imported.count());
+    expect(db.account(cash.id)!.anchor!.amount, Decimal.fromInt(1000));
+    final fee = db.transactions().firstWhere((t) => t.feeOfTxnId != null);
+    expect(db.transactions().where((t) => t.id == fee.feeOfTxnId).single.kind, TxnKind.transfer);
+    expect(planCwmoneyMerge(db, _imported).isEmpty, isTrue);
+  });
+
   test('a failed replaceAll leaves the old data untouched', () {
     final broken = InMemoryLedger(
       transactions: [

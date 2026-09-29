@@ -46,6 +46,21 @@ Future<Uint8List> _encode(
 Future<BackupContents> _decode(({List<int> bytes, String? password}) job) =>
     decodeBackup(job.bytes, password: job.password);
 
+(CwmImportResult, CwmMergePlan) _readAndPlan(({List<int> bytes, InMemoryLedger current}) job) {
+  final result = importCwmoneyCsv(job.bytes);
+  return (result, planCwmoneyMerge(job.current, result.ledger));
+}
+
+/// A CWMoney export that has been read and compared with the ledger,
+/// waiting for the user to choose between merging and replacing.
+class CwmImportPreview {
+  CwmImportPreview(this.fileName, this.result, this.plan);
+
+  final String fileName;
+  final CwmImportResult result;
+  final CwmMergePlan plan;
+}
+
 /// App-wide state: the ledger, the AI connection and the assistant
 /// conversation. Plain ChangeNotifier until the app outgrows it.
 class AppState extends ChangeNotifier {
@@ -188,6 +203,33 @@ class AppState extends ChangeNotifier {
     } on CwmFormatException catch (e) {
       return e.message;
     }
+    return _replaceWith(result, fileName);
+  }
+
+  /// Reads a CWMoney export and works out what merging it would add,
+  /// without changing anything. Throws [CwmFormatException].
+  Future<CwmImportPreview> previewCwmoney(List<int> bytes, String fileName) async {
+    final (result, plan) = await compute(_readAndPlan, (bytes: bytes, current: _detached(ledger)));
+    return CwmImportPreview(fileName, result, plan);
+  }
+
+  /// Replaces the ledger with a previewed export.
+  Future<String?> replaceWithCwmoney(CwmImportPreview preview) => _replaceWith(preview.result, preview.fileName);
+
+  /// Adds the new records of a previewed export to the ledger. Returns an
+  /// error message, or null on success.
+  Future<String?> mergeCwmoney(CwmImportPreview preview, {bool skipPossibleDuplicates = true}) async {
+    await takeSnapshot(SnapshotReason.beforeImport);
+    try {
+      ledger.replaceAll(preview.plan.applyTo(ledger, skipPossibleDuplicates: skipPossibleDuplicates));
+    } on Exception catch (e) {
+      return '寫入資料庫失敗：$e';
+    }
+    _importDone(preview.fileName, preview.result.report, const [], const []);
+    return null;
+  }
+
+  Future<String?> _replaceWith(CwmImportResult result, String fileName) async {
     _carryOverAccountDetails(result.ledger);
     final (kept, dropped) = _carryOverAnchors(result.ledger);
     await takeSnapshot(SnapshotReason.beforeImport);
@@ -196,16 +238,20 @@ class AppState extends ChangeNotifier {
     } on Exception catch (e) {
       return '寫入資料庫失敗：$e';
     }
+    _importDone(fileName, result.report, kept, dropped);
+    return null;
+  }
+
+  void _importDone(String fileName, CwmImportReport report, List<String> kept, List<String> dropped) {
     ledger
       ..setMeta(_metaImportFile, fileName)
       ..setMeta(_metaImportedAt, clock().toIso8601String());
-    lastImport = result.report;
+    lastImport = report;
     anchorsKept = kept;
     anchorsDropped = dropped;
     revision++;
     assistant.reset();
     notifyListeners();
-    return null;
   }
 
   DateTime? get lastBackupAt => switch (ledger.meta(_metaLastBackup)) {
