@@ -6,6 +6,7 @@ import '../format.dart';
 import 'budgets_screen.dart';
 import 'category_picker.dart';
 import 'import_action.dart';
+import 'scan_invoice.dart';
 import 'txn_edit_screen.dart';
 
 class TransactionsScreen extends StatefulWidget {
@@ -69,6 +70,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       return Scaffold(
         appBar: AppBar(
           title: Text(_count == 0 ? '紀錄' : '紀錄（$_count 筆）'),
+          actions: [
+            if (canRecord)
+              IconButton(
+                key: const Key('scanInvoice'),
+                tooltip: '掃描發票',
+                icon: const Icon(Icons.qr_code_scanner),
+                onPressed: () => scanInvoice(context, widget.app),
+              ),
+          ],
         ),
         floatingActionButton: canRecord
             ? FloatingActionButton.extended(

@@ -13,7 +13,7 @@ import 'dialogs.dart';
 /// Also adds and edits recurring items: a new record with a repeat rule
 /// becomes one.
 class TxnEditScreen extends StatefulWidget {
-  const TxnEditScreen({super.key, required this.app, this.txn, this.recurring, this.repeat = false});
+  const TxnEditScreen({super.key, required this.app, this.txn, this.recurring, this.repeat = false, this.draft});
 
   final AppState app;
 
@@ -25,6 +25,9 @@ class TxnEditScreen extends StatefulWidget {
 
   /// Start a new record as a monthly recurring item.
   final bool repeat;
+
+  /// A new record filled in already (a scanned invoice), to check and save.
+  final Txn? draft;
 
   @override
   State<TxnEditScreen> createState() => _TxnEditScreenState();
@@ -57,8 +60,8 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   Txn? get _old => widget.txn;
 
   /// What the form starts from: the record, or the recurring template.
-  Txn? get _source => widget.txn ?? widget.recurring?.template;
-  bool get _isNew => _source == null;
+  Txn? get _source => widget.txn ?? widget.recurring?.template ?? widget.draft;
+  bool get _isNew => widget.txn == null && widget.recurring == null;
   bool get _editingRecurring => widget.recurring != null;
 
   /// A repeat rule can be set on new records and recurring items, not on
@@ -235,7 +238,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
         projectId: _projectId,
         note: note.isEmpty ? null : note,
         place: _old?.place,
-        invoice: _old?.invoice,
+        invoice: (_old ?? widget.draft)?.invoice,
         createdAt: _old?.createdAt ?? _app.clock(),
         feeOfTxnId: _old?.feeOfTxnId,
         recurringId: _old?.recurringId,
@@ -365,7 +368,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final invoice = _old?.invoice;
+    final invoice = (_old ?? widget.draft)?.invoice;
     final amountPrefix = _fromCurrency == baseCurrency ? 'NT\$ ' : '$_fromCurrency ';
     return Scaffold(
       appBar: AppBar(
