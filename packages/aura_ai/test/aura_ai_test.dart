@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
+import 'package:decimal/decimal.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
@@ -176,6 +177,23 @@ void main() {
         (r['accounts'] as List).firstWhere((a) => (a as Map)['name'] == '現金'),
         allOf(containsPair('balance', 2880), containsPair('balance_known', false)),
       );
+    });
+
+    test('overview includes budgets with this month\'s spending', () async {
+      final (_, before) = await _call(_tools(), 'get_ledger_overview');
+      expect(before.containsKey('budgets'), isFalse);
+      final food = _ledger.categories.firstWhere((c) => c.name == '生活費');
+      _ledger
+        ..setBudget(Budget(id: 'b1', amount: Decimal.fromInt(5000)))
+        ..setBudget(Budget(id: 'b2', amount: Decimal.fromInt(150), categoryId: food.id));
+      addTearDown(() => _ledger
+        ..deleteBudget('b1')
+        ..deleteBudget('b2'));
+      final (_, r) = await _call(_tools(), 'get_ledger_overview');
+      expect(r['budgets'], [
+        {'category': null, 'monthly_amount': 5000, 'spent_this_month': 4010, 'remaining': 990},
+        {'category': '生活費', 'monthly_amount': 150, 'spent_this_month': 185, 'remaining': -35},
+      ]);
     });
 
     test('aggregates expenses by main category, excluding transfers', () async {

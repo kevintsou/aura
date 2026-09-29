@@ -1,3 +1,5 @@
+import 'package:decimal/decimal.dart';
+
 import 'balance.dart';
 import 'model.dart';
 
@@ -39,6 +41,9 @@ abstract interface class LedgerReader {
   List<Category> get categories;
   List<Project> get projects;
 
+  /// The whole-month total budget (if any) first, then by creation.
+  List<Budget> get budgets;
+
   Account? account(String id);
   Category? category(String id);
   Project? project(String id);
@@ -62,7 +67,7 @@ abstract interface class LedgerReader {
 /// A ledger that can be written and survives restarts (depending on the
 /// implementation: SQLite on devices, memory in tests and on the web).
 abstract interface class LedgerStore implements LedgerReader {
-  /// Atomically replaces every account, category, project and
+  /// Atomically replaces every account, category, project, budget and
   /// transaction with those of [source].
   void replaceAll(LedgerReader source);
 
@@ -88,7 +93,8 @@ abstract interface class LedgerStore implements LedgerReader {
   void addCategory(Category category);
   void renameCategory(String categoryId, String name);
 
-  /// Only for categories no record uses; removes its subcategories too.
+  /// Only for categories no record uses; removes its subcategories and
+  /// their budgets too.
   void deleteCategory(String categoryId);
 
   /// Reorders sibling categories: [ids] take the positions they occupy
@@ -96,6 +102,10 @@ abstract interface class LedgerStore implements LedgerReader {
   void reorderCategories(List<String> ids);
 
   void addProject(Project project);
+
+  /// Adds [budget], or replaces the one with the same id.
+  void setBudget(Budget budget);
+  void deleteBudget(String budgetId);
 
   void addTxn(Txn txn);
 
@@ -117,14 +127,17 @@ class InMemoryLedger implements LedgerStore {
     List<Category> categories = const [],
     List<Project> projects = const [],
     List<Txn> transactions = const [],
+    List<Budget> budgets = const [],
   }) {
     _load(accounts, categories, projects, transactions);
+    _budgets = {for (final b in budgets) b.id: b};
   }
 
   Map<String, Account> _accounts = {};
   Map<String, Category> _categories = {};
   Map<String, Project> _projects = {};
   List<Txn> _txns = [];
+  Map<String, Budget> _budgets = {};
   final Map<String, String> _meta = {};
 
   void _load(
@@ -146,12 +159,15 @@ class InMemoryLedger implements LedgerStore {
   }
 
   @override
-  void replaceAll(LedgerReader source) => _load(
-    source.accounts,
-    source.categories,
-    source.projects,
-    source.transactions(),
-  );
+  void replaceAll(LedgerReader source) {
+    _load(
+      source.accounts,
+      source.categories,
+      source.projects,
+      source.transactions(),
+    );
+    _budgets = {for (final b in source.budgets) b.id: b};
+  }
 
   @override
   Iterable<AccountFlow> accountFlows() => flowsOf(_txns);
@@ -223,6 +239,7 @@ class InMemoryLedger implements LedgerStore {
     _categories.removeWhere(
       (id, c) => id == categoryId || c.parentId == categoryId,
     );
+    _budgets.removeWhere((_, b) => b.categoryId != null && !_categories.containsKey(b.categoryId));
   }
 
   @override
@@ -246,6 +263,19 @@ class InMemoryLedger implements LedgerStore {
       throw ArgumentError.value(project.name, 'name', '專案名稱重複');
     }
     _projects[project.id] = project;
+  }
+
+  @override
+  void setBudget(Budget budget) {
+    checkBudget(this, budget);
+    _budgets[budget.id] = budget;
+  }
+
+  @override
+  void deleteBudget(String budgetId) {
+    if (_budgets.remove(budgetId) == null) {
+      throw ArgumentError.value(budgetId, 'budgetId');
+    }
   }
 
   @override
@@ -303,6 +333,8 @@ class InMemoryLedger implements LedgerStore {
   List<Category> get categories => List.unmodifiable(_categories.values);
   @override
   List<Project> get projects => List.unmodifiable(_projects.values);
+  @override
+  List<Budget> get budgets => List.unmodifiable(totalFirst(_budgets.values));
 
   @override
   Account? account(String id) => _accounts[id];
@@ -419,6 +451,28 @@ void checkCategory(LedgerReader ledger, Category c) {
         o.name == c.name,
   )) {
     throw ArgumentError.value(c.name, 'name', '已經有同名的分類');
+  }
+}
+
+/// [budgets] with the whole-month total first, otherwise in order.
+List<Budget> totalFirst(Iterable<Budget> budgets) => [
+  ...budgets.where((b) => b.categoryId == null),
+  ...budgets.where((b) => b.categoryId != null),
+];
+
+void checkBudget(LedgerReader ledger, Budget b) {
+  if (b.amount <= Decimal.zero) {
+    throw ArgumentError.value(b.amount, 'amount', '預算要大於 0');
+  }
+  if (b.categoryId != null && ledger.category(b.categoryId!)?.kind != TxnKind.expense) {
+    throw ArgumentError.value(b.categoryId, 'categoryId', '只能替支出分類設定預算');
+  }
+  if (ledger.budgets.any((o) => o.id != b.id && o.categoryId == b.categoryId)) {
+    throw ArgumentError.value(
+      b.categoryId,
+      'categoryId',
+      b.categoryId == null ? '已經有每月總預算' : '這個分類已經有預算',
+    );
   }
 }
 

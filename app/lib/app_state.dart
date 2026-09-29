@@ -1,6 +1,6 @@
 import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide Category;
 
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
@@ -24,6 +24,7 @@ InMemoryLedger _detached(LedgerReader source) => InMemoryLedger(
   categories: source.categories,
   projects: source.projects,
   transactions: source.transactions(),
+  budgets: source.budgets,
 );
 
 Future<Uint8List> _encode(
@@ -95,6 +96,9 @@ class AppState extends ChangeNotifier {
   /// balance had to be dropped because the new file does not reach back
   /// to the date the balance was set for.
   List<String> anchorsKept = const [], anchorsDropped = const [];
+
+  /// Budgets whose category the last replacing import did not have.
+  List<String> budgetsDropped = const [];
 
   Map<String, AccountBalance>? _balances;
   int _balancesRevision = -1;
@@ -232,6 +236,7 @@ class AppState extends ChangeNotifier {
   Future<String?> _replaceWith(CwmImportResult result, String fileName) async {
     _carryOverAccountDetails(result.ledger);
     final (kept, dropped) = _carryOverAnchors(result.ledger);
+    final droppedBudgets = _carryOverBudgets(result.ledger);
     await takeSnapshot(SnapshotReason.beforeImport);
     try {
       ledger.replaceAll(result.ledger);
@@ -239,6 +244,7 @@ class AppState extends ChangeNotifier {
       return '寫入資料庫失敗：$e';
     }
     _importDone(fileName, result.report, kept, dropped);
+    budgetsDropped = droppedBudgets;
     return null;
   }
 
@@ -247,6 +253,7 @@ class AppState extends ChangeNotifier {
       ..setMeta(_metaImportFile, fileName)
       ..setMeta(_metaImportedAt, clock().toIso8601String());
     lastImport = report;
+    budgetsDropped = const [];
     anchorsKept = kept;
     anchorsDropped = dropped;
     revision++;
@@ -336,6 +343,33 @@ class AppState extends ChangeNotifier {
       );
     }
   }
+
+  /// Moves budgets over to the categories of a freshly imported ledger
+  /// with the same names. Returns the names of those left without one.
+  List<String> _carryOverBudgets(InMemoryLedger imported) {
+    String path(LedgerReader l, Category c) =>
+        c.parentId == null ? c.name : '${l.category(c.parentId!)?.name}/${c.name}';
+    final byPath = {
+      for (final c in imported.categories)
+        if (c.kind == TxnKind.expense) path(imported, c): c.id,
+    };
+    final dropped = <String>[];
+    for (final b in ledger.budgets) {
+      final c = b.categoryId == null ? null : ledger.category(b.categoryId!);
+      final target = c == null ? null : byPath[path(ledger, c)];
+      if (c != null && target == null) {
+        dropped.add(path(ledger, c));
+        continue;
+      }
+      imported.setBudget(Budget(id: b.id, amount: b.amount, categoryId: target));
+    }
+    return dropped;
+  }
+
+  /// Adds or changes a budget; returns the user-facing error, if any.
+  String? setBudget(Budget budget) => write((l) => l.setBudget(budget));
+
+  void deleteBudget(String budgetId) => write((l) => l.deleteBudget(budgetId));
 
   /// Re-applies the balances the user set, matched by account name, to a
   /// freshly imported ledger. A balance set for a day before the new file

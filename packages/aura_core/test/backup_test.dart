@@ -14,6 +14,7 @@ Object? _snapshot(LedgerReader l) => [
   ],
   [for (final c in l.categories) [c.id, c.kind, c.name, c.parentId]],
   [for (final p in l.projects) [p.id, p.name]],
+  [for (final b in l.budgets) [b.id, b.categoryId, b.amount]],
   [
     for (final t in l.transactions())
       [
@@ -42,7 +43,15 @@ void main() {
         BalanceAnchor(amount: Decimal.parse('-1234.56'), date: DateTime(2026, 9, 29)),
       )
       ..updateAccount(ledger.accounts.first.id, archived: true)
-      ..addProject(const Project(id: 'p-new', name: '新專案'));
+      ..addProject(const Project(id: 'p-new', name: '新專案'))
+      ..setBudget(Budget(id: 'b-total', amount: Decimal.parse('30000')))
+      ..setBudget(
+        Budget(
+          id: 'b-food',
+          amount: Decimal.parse('4500.5'),
+          categoryId: ledger.categories.firstWhere((c) => c.name == '生活費').id,
+        ),
+      );
   });
 
   test('round-trips every field without a password', () async {

@@ -99,6 +99,20 @@ class Category {
       Category(id: id, kind: kind, name: name, parentId: parentId);
 }
 
+/// A monthly spending limit in the base currency.
+class Budget {
+  const Budget({required this.id, required this.amount, this.categoryId});
+
+  final String id;
+
+  /// An expense category; a main category includes its subcategories.
+  /// Null for all expenses together.
+  final String? categoryId;
+
+  /// Per calendar month.
+  final Decimal amount;
+}
+
 class Project {
   const Project({required this.id, required this.name});
 

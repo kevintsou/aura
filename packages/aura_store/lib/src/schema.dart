@@ -79,6 +79,15 @@ const migrations = <String>[
   ALTER TABLE accounts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
   CREATE UNIQUE INDEX accounts_by_name ON accounts (name);
   ''',
+  // 4: monthly budgets; a NULL category is the total of all expenses.
+  '''
+  CREATE TABLE budgets (
+    id          TEXT PRIMARY KEY,
+    category_id TEXT REFERENCES categories (id) ON DELETE CASCADE,
+    amount      TEXT NOT NULL,              -- exact decimal, base currency
+    sort        INTEGER NOT NULL
+  );
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

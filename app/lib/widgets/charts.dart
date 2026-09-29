@@ -84,9 +84,15 @@ class MonthColumns extends StatelessWidget {
     required this.selected,
     required this.onSelect,
     this.height = 180,
+    this.reference,
+    this.referenceLabel = '預算',
   });
 
   final List<MonthTotal> months;
+
+  /// A level to compare against (a budget), drawn as a dashed line.
+  final Decimal? reference;
+  final String referenceLabel;
 
   /// Year and month of the highlighted column, if it is on the chart.
   final (int, int)? selected;
@@ -103,6 +109,9 @@ class MonthColumns extends StatelessWidget {
           months: months,
           selected: selected,
           colors: colors,
+          reference: reference?.toDouble(),
+          referenceLabel: referenceLabel,
+          referenceColor: Theme.of(context).colorScheme.onSurfaceVariant,
           textStyle: text.copyWith(color: colors.muted),
           valueStyle: text.copyWith(
             color: Theme.of(context).colorScheme.onSurface,
@@ -129,11 +138,17 @@ class _ColumnsPainter extends CustomPainter {
     required this.colors,
     required this.textStyle,
     required this.valueStyle,
+    this.reference,
+    this.referenceLabel = '',
+    this.referenceColor = const Color(0xFF000000),
   });
 
   final List<MonthTotal> months;
   final (int, int)? selected;
   final ChartColors colors;
+  final double? reference;
+  final String referenceLabel;
+  final Color referenceColor;
   final TextStyle textStyle;
   final TextStyle valueStyle;
 
@@ -141,7 +156,7 @@ class _ColumnsPainter extends CustomPainter {
   static const _labelHeight = 30.0;
   static const _top = 20.0; // room for the selected column's value
 
-  double get _max => months.fold(0.0, (m, e) => math.max(m, e.total.toDouble()));
+  double get _max => months.fold(reference ?? 0.0, (m, e) => math.max(m, e.total.toDouble()));
   double get _min => months.fold(0.0, (m, e) => math.min(m, e.total.toDouble()));
 
   double _slot(Size size) => (size.width - _axisWidth) / months.length;
@@ -202,7 +217,7 @@ class _ColumnsPainter extends CustomPainter {
       // Month numbers; the year under the first column and each January.
       final label = _text(m.month == 1 || i == 0 ? '${m.month}\n${m.year}' : '${m.month}');
       label.paint(canvas, Offset(cx - label.width / 2, size.height - _labelHeight + 4));
-      if (isSel && v != 0) {
+      if (isSel && v != 0 && !(reference != null && (y(v) - y(reference!)).abs() < 14)) {
         // The highlighted column's value sits on its cap, in text ink.
         final value = TextPainter(
           text: TextSpan(text: compactNumber(v), style: valueStyle),
@@ -213,6 +228,22 @@ class _ColumnsPainter extends CustomPainter {
         value.paint(canvas, Offset(x, capY.clamp(0, size.height - _labelHeight - value.height)));
       }
     }
+    if (reference != null) _paintReference(canvas, size, y(reference!).roundToDouble() + 0.5);
+  }
+
+  void _paintReference(Canvas canvas, Size size, double y) {
+    final paint = Paint()
+      ..color = referenceColor
+      ..strokeWidth = 1.5;
+    for (var x = _axisWidth; x < size.width; x += 8) {
+      canvas.drawLine(Offset(x, y), Offset(math.min(x + 4, size.width), y), paint);
+    }
+    final label = TextPainter(
+      text: TextSpan(text: referenceLabel, style: textStyle.copyWith(color: referenceColor)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    // At the left end, where the oldest (least relevant) column is.
+    label.paint(canvas, Offset(_axisWidth + 2, y - label.height - 1));
   }
 
   @override
@@ -233,7 +264,7 @@ class _ColumnsPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ColumnsPainter old) =>
-      old.months != months || old.selected != selected || old.colors != colors;
+      old.months != months || old.selected != selected || old.colors != colors || old.reference != reference;
 
   @override
   bool shouldRebuildSemantics(_ColumnsPainter old) => shouldRepaint(old);
@@ -269,3 +300,72 @@ class ShareBar extends StatelessWidget {
 /// Fraction of [value] relative to [max], 0 when either is not positive.
 double fractionOf(Decimal value, Decimal max) =>
     max > Decimal.zero && value > Decimal.zero ? (value / max).toDouble() : 0;
+
+/// Budget progress: a bar of the share spent, a tick for how much of the
+/// month has gone by, and the over-budget state in the "bad" colour
+/// (always with words next to it, never colour alone).
+class BudgetMeter extends StatelessWidget {
+  const BudgetMeter({super.key, required this.used, this.elapsed, this.over = false});
+
+  /// Share spent; above 1 when over budget.
+  final double used;
+
+  /// Share of the month gone; null outside the current month.
+  final double? elapsed;
+  final bool over;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ChartColors.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: '已用 ${(used * 100).round()}%'
+          '${elapsed == null ? '' : '，本月已過 ${(elapsed! * 100).round()}%'}',
+      child: SizedBox(
+        height: 16,
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final w = box.maxWidth;
+            final fill = (used.clamp(0.0, 1.0) * w).toDouble();
+            return Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 3,
+                  height: 10,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  width: fill,
+                  top: 3,
+                  height: 10,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: over ? colors.bad : colors.accent,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                if (elapsed != null)
+                  Positioned(
+                    left: (elapsed!.clamp(0.0, 1.0) * w - 1).clamp(0.0, w - 2).toDouble(),
+                    width: 2,
+                    top: 0,
+                    bottom: 0,
+                    child: ColoredBox(color: scheme.onSurface),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

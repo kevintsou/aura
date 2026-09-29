@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import 'budgets_screen.dart';
 import 'category_picker.dart';
 import 'import_action.dart';
 import 'txn_edit_screen.dart';
@@ -55,7 +56,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     listenable: widget.app,
     builder: (context, _) {
       _refreshIfChanged();
-      final banner = _review > 0 ? 1 : 0;
+      final headers = [
+        ?budgetSummary(context, widget.app),
+        if (_review > 0)
+          MaterialBanner(
+            content: Text('有 $_review 筆轉帳只找到一邊，請確認'),
+            leading: const Icon(Icons.flag_outlined),
+            actions: const [SizedBox.shrink()],
+          ),
+      ];
       final canRecord = widget.app.activeAccounts.isNotEmpty;
       return Scaffold(
         appBar: AppBar(
@@ -73,18 +82,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         body: _count == 0
             ? _Empty(app: widget.app)
             : ListView.separated(
-                itemCount: _count + banner,
+                itemCount: _count + headers.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  if (banner == 1 && i == 0) {
-                    return MaterialBanner(
-                      content: Text('有 $_review 筆轉帳只找到一邊，請確認'),
-                      leading: const Icon(Icons.flag_outlined),
-                      actions: const [SizedBox.shrink()],
-                    );
-                  }
-                  return _TxnTile(app: widget.app, txn: _at(i - banner));
-                },
+                itemBuilder: (context, i) =>
+                    i < headers.length ? headers[i] : _TxnTile(app: widget.app, txn: _at(i - headers.length)),
               ),
       );
     },

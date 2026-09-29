@@ -31,6 +31,7 @@
     "accounts":     [{"id", "name", "type", "currency", "archived"?, "anchor"?: {"amount", "date"}}],
     "categories":   [{"id", "kind", "name", "parentId"?}],            // 依顯示順序
     "projects":     [{"id", "name"}],
+    "budgets"?:     [{"id", "categoryId"?, "amount"}],               // 每月金額；沒有 categoryId 是總預算
     "transactions": [{"id", "kind", "date", "amount", "baseAmount", "accountId"?, "toAccountId"?,
                       "toAmount"?, "fxRate"?, "categoryId"?, "projectId"?, "note"?, "place"?,
                       "createdAt"?, "feeOf"?, "needsReview"?, "legacyRows"?,
@@ -42,6 +43,7 @@
 ```
 
 - 金額一律是**十進位字串**，不會有浮點誤差。
+- `budgets` 是後來加的欄位：舊的備份檔沒有它，還原時就是沒有預算；舊版 App 讀到新檔案會略過它。
 - 日期是 `YYYY-MM-DD`。
 
 **加密（設了密碼時）：** 把 `data` 換成：

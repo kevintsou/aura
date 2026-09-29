@@ -128,9 +128,13 @@ Aura 會在手機上執行每一個 tool call，然後把結果加進對話再�
   "accounts": [{ "name": "現金", "type": "cash", "currency": "TWD", "balance": 2880, "balance_known": true }],
   "expense_categories": { "生活費": ["早餐", "午餐"] },
   "income_categories": { "工作收入": ["薪資收入"] },
-  "projects": ["旅遊支出"], "needs_review_count": 104, "invoice_items_available": true
+  "projects": ["旅遊支出"],
+  "budgets": [{ "category": null, "monthly_amount": 20000, "spent_this_month": 15320, "remaining": 4680 }],
+  "needs_review_count": 104, "invoice_items_available": true
 }
 ```
+
+`budgets` 只有在使用者設了預算時才會出現：每月的金額和這個月到今天花了多少，`category` 為 `null` 是每月總預算，主分類的預算包含它的子分類。
 
 `balance` 是今天的餘額，以該帳戶的幣別表示。`balance_known` 為 `false` 表示使用者還沒設定實際餘額，這個數字只是紀錄的加總，可能不準，回答時要提醒使用者。
 

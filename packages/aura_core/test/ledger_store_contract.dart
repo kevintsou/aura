@@ -236,6 +236,60 @@ void ledgerStoreContract(LedgerStore Function() create) {
     });
   });
 
+  group('budgets', () {
+    Budget budget(String id, String amount, [String? categoryId]) =>
+        Budget(id: id, amount: Decimal.parse(amount), categoryId: categoryId);
+    List<(String, String?, String)> listed() => [
+      for (final b in l.budgets) (b.id, b.categoryId, '${b.amount}'),
+    ];
+
+    test('set, change and delete, with the total listed first', () {
+      l
+        ..setBudget(budget('b1', '3000', 'food'))
+        ..setBudget(budget('b2', '20000'))
+        ..setBudget(budget('b3', '1500.5', 'lunch'));
+      expect(listed(), [('b2', null, '20000'), ('b1', 'food', '3000'), ('b3', 'lunch', '1500.5')]);
+      l
+        ..setBudget(budget('b1', '3500', 'food'))
+        ..deleteBudget('b3');
+      expect(listed(), [('b2', null, '20000'), ('b1', 'food', '3500')]);
+      expect(() => l.deleteBudget('b3'), throwsArgumentError);
+    });
+
+    test('one per category, positive, expense categories only', () {
+      l
+        ..setBudget(budget('b1', '100'))
+        ..setBudget(budget('b2', '100', 'food'));
+      expect(() => l.setBudget(budget('b3', '100')), throwsArgumentError);
+      expect(() => l.setBudget(budget('b3', '100', 'food')), throwsArgumentError);
+      expect(() => l.setBudget(budget('b3', '0', 'lunch')), throwsArgumentError);
+      expect(() => l.setBudget(budget('b3', '100', 'work')), throwsArgumentError);
+      expect(() => l.setBudget(budget('b3', '100', 'nope')), throwsArgumentError);
+      expect(l.budgets, hasLength(2));
+    });
+
+    test('go away with their category', () {
+      l
+        ..setBudget(budget('b1', '100', 'lunch'))
+        ..setBudget(budget('b2', '100'))
+        ..deleteCategory('food');
+      expect(listed(), [('b2', null, '100')]);
+    });
+
+    test('are replaced by replaceAll', () {
+      l.setBudget(budget('b1', '100', 'food'));
+      l.replaceAll(
+        InMemoryLedger(
+          categories: [food],
+          budgets: [budget('b9', '42.5', 'food'), budget('b8', '900')],
+        ),
+      );
+      expect(listed(), [('b8', null, '900'), ('b9', 'food', '42.5')]);
+      l.replaceAll(InMemoryLedger());
+      expect(l.budgets, isEmpty);
+    });
+  });
+
   test('meta values are listed', () {
     l
       ..setMeta('a', '1')

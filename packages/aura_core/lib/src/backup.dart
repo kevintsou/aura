@@ -86,6 +86,10 @@ Future<Uint8List> encodeBackup(
     'accounts': [for (final a in ledger.accounts) _accountToJson(a)],
     'categories': [for (final c in ledger.categories) _categoryToJson(c)],
     'projects': [for (final p in ledger.projects) {'id': p.id, 'name': p.name}],
+    'budgets': [
+      for (final b in ledger.budgets)
+        {'id': b.id, if (b.categoryId != null) 'categoryId': b.categoryId, 'amount': '${b.amount}'},
+    ],
     'transactions': [for (final t in txns) _txnToJson(t)],
     'meta': meta,
   };
@@ -231,11 +235,21 @@ BackupInfo _info(Map<String, Object?> envelope) {
       Project(id: p['id'] as String, name: p['name'] as String),
   ];
   final txns = [for (final t in list('transactions')) _txnFromJson(t)];
+  // Budgets came later; older backups have none.
+  final budgets = [
+    for (final b in d['budgets'] as List? ?? const [])
+      Budget(
+        id: (b as Map)['id'] as String,
+        categoryId: b['categoryId'] as String?,
+        amount: Decimal.parse(b['amount'] as String),
+      ),
+  ];
   final ledger = InMemoryLedger(
     accounts: accounts,
     categories: categories,
     projects: projects,
     transactions: txns,
+    budgets: budgets,
   );
   // Check integrity only, not today's naming rules: an old backup must
   // stay restorable even if the app has since become stricter.
@@ -250,6 +264,12 @@ BackupInfo _info(Map<String, Object?> envelope) {
   unique('分類', categories.map((c) => c.id));
   unique('專案', projects.map((p) => p.id));
   unique('紀錄', txns.map((t) => t.id));
+  unique('預算', budgets.map((b) => b.id));
+  for (final b in budgets) {
+    if (b.categoryId != null && ledger.category(b.categoryId!) == null) {
+      throw BackupException('備份檔的內容不一致：預算的分類不存在');
+    }
+  }
   for (final c in categories) {
     final parent = c.parentId == null ? null : ledger.category(c.parentId!);
     if (c.parentId != null && (parent == null || parent.kind != c.kind)) {

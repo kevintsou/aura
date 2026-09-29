@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../format.dart';
 import '../widgets/charts.dart';
+import 'budgets_screen.dart';
 import 'category_report_screen.dart';
 
 /// Monthly or yearly overview: totals with change, a 12-month trend and
@@ -76,7 +77,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final p = data.period;
       final kindLabel = _kind == TxnKind.expense ? '支出' : '收入';
       return Scaffold(
-        appBar: AppBar(title: const Text('報表')),
+        appBar: AppBar(
+          title: const Text('報表'),
+          actions: [
+            TextButton.icon(
+              key: const Key('openBudgets'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BudgetsScreen(
+                    app: _app,
+                    month: p.isYear ? null : p,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.savings_outlined),
+              label: const Text('預算'),
+            ),
+          ],
+        ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           children: [

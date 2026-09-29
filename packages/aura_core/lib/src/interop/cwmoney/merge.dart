@@ -63,6 +63,7 @@ class CwmMergePlan {
       accounts: [...current.accounts, ...newAccounts],
       categories: [...current.categories, ...newCategories],
       projects: [...current.projects, ...newProjects],
+      budgets: current.budgets,
       transactions: [
         for (final t in current.transactions()) replaced[t.id] ?? t,
         for (final t in added)

@@ -4,15 +4,16 @@
 
 - **可以從頭開始記帳**：第一次打開選「從頭開始」，會建立常用分類和一個現金帳戶，然後就能記支出、收入、轉帳（含外幣）。
 - **報表**：每月／每年的支出、收入、結餘和上一期比較，近 12 個月的趨勢，以及各分類的占比，點進去可以看子分類和明細。
+- **預算**：設定每月總預算或分類預算，看還剩多少、每天還可以花多少，花太快或超支時會提醒。
 - **備份與還原**：建立 `.aura` 備份檔（可以設密碼，AES-256 加密），存到 Google Drive、iCloud 或任何地方，換手機時還原。手機上也會每天、以及匯入和還原之前自動保留快照，操作失誤可以救回。
 - **相容 CWMoney**：也可以直接匯入 CWMoney 經典版匯出的 CSV。匯入後輸入各帳戶今天的實際餘額，就會自動算出期初餘額。之後在 CWMoney 匯出的新月份可以**合併**進來，已經有的紀錄會自動略過。
 - **AI 自己接**：用自己的 OpenAI API 金鑰，或任何 OpenAI 相容服務、本機模型、自己寫的 Agent，用自然語言分析自己的收支。
 
 沒有帳號、沒有廣告，也沒有 Aura 伺服器。資料存在手機的 SQLite 資料庫裡；AI 要查什麼，由手機在本機算好再交給你選的 AI。
 
-| 記一筆 | 紀錄 | 報表 | 帳戶與期初餘額 | AI 連線設定 | AI 助理（可以看到送出了什麼） |
-|---|---|---|---|---|---|
-| ![記一筆](docs/images/new-record.png) | ![紀錄](docs/images/records.png) | ![報表](docs/images/reports.png) | ![帳戶](docs/images/accounts.png) | ![AI 連線設定](docs/images/ai-settings.png) | ![AI 助理](docs/images/assistant.png) |
+| 記一筆 | 紀錄 | 報表 | 預算 | 帳戶與期初餘額 | AI 連線設定 | AI 助理（可以看到送出了什麼） |
+|---|---|---|---|---|---|---|
+| ![記一筆](docs/images/new-record.png) | ![紀錄](docs/images/records.png) | ![報表](docs/images/reports.png) | ![預算](docs/images/budgets.png) | ![帳戶](docs/images/accounts.png) | ![AI 連線設定](docs/images/ai-settings.png) | ![AI 助理](docs/images/assistant.png) |
 
 > 截圖用的是 `packages/aura_core/test/fixtures/` 裡的虛構資料，以及 `examples/mock_agent.py` 範例 Agent。
 
@@ -20,9 +21,9 @@
 
 ```
 app/                    Flutter App（iOS / Android / Web）
-  lib/screens/          紀錄、報表、帳戶、AI 助理、AI 連線設定、設定
+  lib/screens/          紀錄、報表、預算、帳戶、AI 助理、AI 連線設定、設定
 packages/
-  aura_core/            資料模型、帳本查詢、報表計算、CWMoney 匯入與合併（純 Dart）
+  aura_core/            資料模型、帳本查詢、報表與預算計算、CWMoney 匯入與合併（純 Dart）
   aura_ai/              AI 連線（OpenAI 相容）、帳本工具、Agent 迴圈（純 Dart）
   aura_store/           SQLite 儲存與 schema migration
 examples/mock_agent.py  最小的自訂 Agent 範例（只用 Python 標準函式庫）

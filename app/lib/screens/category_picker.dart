@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 
 /// Picks a category of [kind]: every main category is a heading with its
 /// subcategories as chips, so any choice is one tap away. A main category
-/// without subcategories is itself selectable.
+/// without subcategories is itself selectable; with [mainsSelectable],
+/// every main category is (for choices that cover its subcategories).
+/// [disabledIds] are shown but cannot be picked.
 Future<String?> pickCategory(
   BuildContext context, {
   required LedgerReader ledger,
   required TxnKind kind,
   String? selectedId,
+  bool mainsSelectable = false,
+  Set<String> disabledIds = const {},
 }) => showModalBottomSheet<String>(
   context: context,
   isScrollControlled: true,
@@ -39,11 +43,14 @@ Future<String?> pickCategory(
               spacing: 8,
               runSpacing: 4,
               children: [
-                for (final c in _selectable(ledger, main))
+                for (final c in [
+                  if (mainsSelectable && _hasSubs(ledger, main)) main,
+                  ..._selectable(ledger, main),
+                ])
                   ChoiceChip(
-                    label: Text(c.name),
+                    label: Text(c.id == main.id && _hasSubs(ledger, main) ? '整個${c.name}' : c.name),
                     selected: c.id == selectedId,
-                    onSelected: (_) => Navigator.pop(context, c.id),
+                    onSelected: disabledIds.contains(c.id) ? null : (_) => Navigator.pop(context, c.id),
                   ),
               ],
             ),
@@ -53,6 +60,8 @@ Future<String?> pickCategory(
     );
   },
 );
+
+bool _hasSubs(LedgerReader ledger, Category main) => ledger.categories.any((c) => c.parentId == main.id);
 
 List<Category> _selectable(LedgerReader ledger, Category main) {
   final subs = [for (final c in ledger.categories) if (c.parentId == main.id) c];

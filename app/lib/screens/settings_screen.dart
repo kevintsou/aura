@@ -4,6 +4,7 @@ import '../app_state.dart';
 import '../format.dart';
 import 'ai_settings_screen.dart';
 import 'backup_screen.dart';
+import 'budgets_screen.dart';
 import 'categories_screen.dart';
 import 'import_action.dart';
 
@@ -50,6 +51,19 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => BackupScreen(app: app)),
+            ),
+          ),
+          ListTile(
+            key: const Key('manageBudgets'),
+            leading: const Icon(Icons.savings_outlined),
+            title: const Text('預算'),
+            subtitle: Text(
+              app.ledger.budgets.isEmpty ? '設定每月總預算或分類預算' : '${app.ledger.budgets.length} 個預算',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => BudgetsScreen(app: app)),
             ),
           ),
           ListTile(

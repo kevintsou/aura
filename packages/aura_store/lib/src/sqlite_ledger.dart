@@ -32,6 +32,7 @@ class SqliteLedger implements LedgerStore {
   var _accounts = <String, Account>{};
   var _categories = <String, Category>{};
   var _projects = <String, Project>{};
+  var _budgets = <Budget>[];
 
   int get schemaVersion => _db.userVersion;
 
@@ -68,6 +69,14 @@ class SqliteLedger implements LedgerStore {
           name: r['name'] as String,
         ),
     };
+    _budgets = totalFirst([
+      for (final r in _db.select('SELECT * FROM budgets ORDER BY sort'))
+        Budget(
+          id: r['id'] as String,
+          categoryId: r['category_id'] as String?,
+          amount: Decimal.parse(r['amount'] as String),
+        ),
+    ]);
   }
 
   @override
@@ -76,6 +85,8 @@ class SqliteLedger implements LedgerStore {
   List<Category> get categories => List.unmodifiable(_categories.values);
   @override
   List<Project> get projects => List.unmodifiable(_projects.values);
+  @override
+  List<Budget> get budgets => List.unmodifiable(_budgets);
 
   @override
   Account? account(String id) => _accounts[id];
@@ -318,7 +329,7 @@ class SqliteLedger implements LedgerStore {
   void replaceAll(LedgerReader source) {
     _atomic(() {
       for (final table in const [
-        'invoice_items', 'invoices', 'txns', 'categories', 'projects', //
+        'invoice_items', 'invoices', 'txns', 'budgets', 'categories', 'projects', //
         'accounts',
       ]) {
         _db.execute('DELETE FROM $table');
@@ -354,6 +365,7 @@ class SqliteLedger implements LedgerStore {
     ];
     final order = {for (final (i, c) in source.categories.indexed) c.id: i};
     each(_insertCategory, cats, (c, _) => _categoryArgs(c, order[c.id]!));
+    each(_insertBudget, source.budgets, (b, i) => [b.id, b.categoryId, b.amount.toString(), i]);
     final txns = source.transactions();
     each(_insertTxn, txns, (t, _) => _txnArgs(t));
     final withInvoice = txns.where((t) => t.invoice != null);
@@ -464,6 +476,25 @@ class SqliteLedger implements LedgerStore {
     _loadReferenceData();
   }
 
+  @override
+  void setBudget(Budget budget) {
+    checkBudget(this, budget);
+    final args = [budget.id, budget.categoryId, budget.amount.toString(), _nextSort('budgets')];
+    _db.execute(
+      '$_insertBudget ON CONFLICT(id) DO UPDATE SET '
+      'category_id = excluded.category_id, amount = excluded.amount',
+      args,
+    );
+    _loadReferenceData();
+  }
+
+  @override
+  void deleteBudget(String budgetId) {
+    _db.execute('DELETE FROM budgets WHERE id = ?', [budgetId]);
+    if (_db.updatedRows == 0) throw ArgumentError.value(budgetId, 'budgetId');
+    _loadReferenceData();
+  }
+
   bool _txnExists(String id) =>
       _db.select('SELECT 1 FROM txns WHERE id = ?', [id]).isNotEmpty;
 
@@ -569,6 +600,8 @@ const _insertCategory =
 
 List<Object?> _categoryArgs(Category c, int sort) =>
     [c.id, c.kind.name, c.name, c.parentId, sort];
+
+const _insertBudget = 'INSERT INTO budgets (id, category_id, amount, sort) VALUES (?, ?, ?, ?)';
 
 const _insertTxn =
     'INSERT INTO txns (id, kind, date, account_id, to_account_id, amount, '

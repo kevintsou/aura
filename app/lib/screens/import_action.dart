@@ -258,6 +258,8 @@ String _balanceNote(AppState app) {
     if (app.anchorsDropped.isNotEmpty)
       '${app.anchorsDropped.join('、')} 的餘額設定早於這個檔案的第一筆紀錄，'
           '已經清除，請重新設定。',
+    if (app.budgetsDropped.isNotEmpty)
+      '檔案裡沒有「${app.budgetsDropped.join('、')}」分類，這些預算已經移除。',
     if (app.balances.values.any((b) => !b.isSet))
       'CWMoney 的 CSV 沒有期初餘額，請到「帳戶」輸入各帳戶目前的實際餘額。',
   ];

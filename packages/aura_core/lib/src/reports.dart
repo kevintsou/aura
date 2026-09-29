@@ -125,12 +125,14 @@ class MonthTotal {
 }
 
 /// [count] consecutive months of [kind] totals ending with [end]'s month,
-/// oldest first; months without records are zero.
+/// oldest first; months without records are zero. With [categoryId],
+/// only that category (and its subcategories).
 List<MonthTotal> monthlyTotals(
   LedgerReader ledger,
   TxnKind kind, {
   required DateTime end,
   int count = 12,
+  String? categoryId,
 }) {
   final months = [
     for (var i = count - 1; i >= 0; i--) DateTime(end.year, end.month - i),
@@ -141,6 +143,7 @@ List<MonthTotal> monthlyTotals(
       from: months.first,
       to: DateTime(end.year, end.month + 1, 0),
       kinds: {kind},
+      categoryIds: categoryId == null ? null : {categoryId},
     ),
   )) {
     final key = (t.date.year, t.date.month);

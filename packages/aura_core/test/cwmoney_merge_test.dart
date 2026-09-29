@@ -183,7 +183,8 @@ void main() {
           note: '午餐',
         ),
       )
-      ..setBalanceAnchor(cash.id, BalanceAnchor(amount: Decimal.fromInt(500), date: DateTime(2026, 9, 1)));
+      ..setBalanceAnchor(cash.id, BalanceAnchor(amount: Decimal.fromInt(500), date: DateTime(2026, 9, 1)))
+      ..setBudget(Budget(id: 'b', amount: Decimal.fromInt(8000)));
 
     final plan = planCwmoneyMerge(current, _import(_all));
     expect(plan.newTxns, hasLength(11));
@@ -194,5 +195,6 @@ void main() {
     expect(_merge(current, plan).count(), 11);
     expect(_merge(current, plan, skip: false).count(), 12);
     expect(_merge(current, plan).account(cash.id)!.anchor!.amount, Decimal.fromInt(500));
+    expect(_merge(current, plan).budgets.single.amount, Decimal.fromInt(8000));
   });
 }

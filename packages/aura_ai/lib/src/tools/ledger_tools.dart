@@ -53,7 +53,9 @@ class _OverviewTool extends AuraTool {
         'current balances, the category tree, projects. Call this first to '
         'learn valid names. Balances are in each account\'s own currency; '
         'balance_known=false means the user never set a real balance, so '
-        'that balance only reflects recorded activity and may be wrong.',
+        'that balance only reflects recorded activity and may be wrong. '
+        'budgets are monthly spending limits in the base currency with '
+        'this month\'s spending (category null = all expenses).',
     parameters: {'type': 'object', 'properties': <String, Object?>{}},
   );
 
@@ -89,6 +91,16 @@ class _OverviewTool extends AuraTool {
       'expense_categories': tree(TxnKind.expense),
       'income_categories': tree(TxnKind.income),
       'projects': [for (final p in l.projects) p.name],
+      if (l.budgets.isNotEmpty)
+        'budgets': [
+          for (final b in budgetStatuses(l, Period.month(clock().year, clock().month), today: clock()))
+            {
+              'category': b.category?.name,
+              'monthly_amount': _num(b.amount),
+              'spent_this_month': _num(b.spent),
+              'remaining': _num(b.remaining),
+            },
+        ],
       'needs_review_count': all.where((t) => t.needsReview).length,
       'invoice_items_available': ctx.shareInvoiceItems,
     };

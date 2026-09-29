@@ -63,7 +63,7 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 ### 3.2 預算與報表
 | 功能 | CWMoney | Aura 優先級 |
 |---|---|---|
-| 每月總預算、分類預算與進度 | ✅ | P1 |
+| 每月總預算、分類預算與進度 | ✅ | ✅ 每月總預算＋任一支出分類（主分類含子分類）；進度條上標出今天，顯示還剩多少、每天可花多少、花得比進度快、超支；近 12 個月對照預算線；新增時建議過去 3 個月的平均 |
 | 圓餅圖、長條圖、趨勢圖 | ✅ | ✅ P0 基本版（近 12 個月趨勢長條、分類占比排行，可以點進子分類和明細；用排序長條代替圓餅圖，比較好比大小）／P1 進階版 |
 | 週報、月報、年報 | ✅ | ✅ 月報、年報（含和上一期比較）／P1 週報 |
 | 帳戶餘額與資產總覽 | ✅ | P0 |
@@ -205,7 +205,7 @@ Txn         id, kind(expense|income|transfer), date, time,
             photo_path?, lat?, lng?, created_at?, updated_at,
             needs_review(例如單邊轉帳), source_id, legacy_payload
 Recurring   id, template(Txn 欄位), rule(RRULE), next_run, end
-Budget      id, period(month), category_id?(null=總預算), amount_minor
+Budget      id, category_id?(null=總預算), amount(decimal, 每月)
 Invoice     id, number, date, seller_tax_id, seller_name, seller_address,
             carrier(敏感，要遮蔽), txn_id?
 InvoiceItem invoice_id, name, qty(decimal), amount(decimal, 可以是負數)
@@ -236,7 +236,7 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 - **隱私**：樣本檔要先去識別化（`scripts/anonymize_cwm.py`）才能放進 repo；真實樣本只在本機測試，**不 commit**。
 - **CSV 匯入的驗收標準**：用真實樣本（17,158 筆）測試。解析成功率 100%；轉帳配對率 ≥ 97%，剩下的標記為 `needs_review`；依帳戶加總的「小計」要和 CWMoney 完全一致。
 - **AI 評測集**：準備一組問題和標準答案（例如「2025 年外食總額」），每次換模型或改 prompt 都要跑，比較正確率和 token 用量。
-- **目前的測試**：`aura_core` 72 個、`aura_ai` 19 個、`aura_store` 44 個、App 46 個。`LedgerStore` 的行為用同一套合約測試同時驗證記憶體版和 SQLite 版。另外，已經用使用者的真實樣本（17,158 列）在本機驗證過：解碼結果和 Python 參考實作逐字相同、收支加總完全一致；SQLite 往返 14,894 筆交易，0 筆不一致；9 月的檔案合併進完整歷史，新增的剛好是那 110 筆。
+- **目前的測試**：`aura_core` 81 個、`aura_ai` 20 個、`aura_store` 48 個、App 50 個。`LedgerStore` 的行為用同一套合約測試同時驗證記憶體版和 SQLite 版。另外，已經用使用者的真實樣本（17,158 列）在本機驗證過：解碼結果和 Python 參考實作逐字相同、收支加總完全一致；SQLite 往返 14,894 筆交易，0 筆不一致；9 月的檔案合併進完整歷史，新增的剛好是那 110 筆。
 
 ---
 
@@ -247,7 +247,7 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 | **M0 格式研究** | ✅ CSV 已完成（`.sdb`／`.idb` 改成選用） | `docs/cwmoney-format.md` | 完成 |
 | **M1 骨架＋匯入** | ✅ Flutter 專案、資料模型、CWMoney CSV 匯入（新版格式）、紀錄列表（分頁）、SQLite 儲存、帳戶餘額與期初餘額補填、帳戶類型和幣別修改；🔲 舊版 HTML 格式 | 可以安裝的內測版，能匯入並瀏覽 CWMoney 的資料 | 剩約 1 天 |
 | **M2 記帳 MVP** | ✅ 從頭開始（預設分類和現金帳戶）、記一筆／編輯／刪除、轉帳（含跨幣別）、外幣匯率、專案、帳戶新增／改名／封存／刪除、分類管理、備份與還原、基本報表（月／年、趨勢、分類占比）、CWMoney 合併匯入 | Alpha | 完成 |
-| **M3 V1** | 週期收支、預算、進階報表、照片、App 鎖、隱藏帳戶、雲端硬碟備份、匯出 CWMoney 格式的 CSV | Beta → 上架 | 5 週 |
+| **M3 V1** | ✅ 預算；🔲 週期收支、進階報表、照片、App 鎖、隱藏帳戶、雲端硬碟備份、匯出 CWMoney 格式的 CSV | Beta → 上架 | 剩約 4 週 |
 | **M5 AI** | ✅ BYOK 連線設定、OpenAI 相容 client、本機帳本工具、Agent 迴圈、對話 UI（**第一版已完成**）；🔲 月報洞察、固定支出偵測、發票自動分類、回答附圖表、串流輸出、AI 評測集 | AI 助理 | 剩下的部分約 3 週 |
 | **M4 V2** | 發票載具同步與對獎、GPS、多裝置同步、共享帳本、桌面小工具、AI 預算模擬 | 2.x | 之後再排 |
 
