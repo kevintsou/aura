@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../format.dart';
 import '../lock/lock_settings_screen.dart';
+import '../widgets/charts.dart';
 import 'account_fields.dart';
+import 'dialogs.dart';
 import 'account_screen.dart';
 import 'new_account_screen.dart';
 
@@ -63,7 +65,7 @@ class AccountsScreen extends StatelessWidget {
               )
             : ListView(
                 children: [
-                  _Summary(balances: balances),
+                  _Summary(app: app, balances: balances),
                   if (unset > 0 || unknown > 0)
                     _UnsetNotice(unset: unset, unknownCurrency: unknown),
                   for (final type in AccountType.values)
@@ -116,43 +118,105 @@ class AccountsScreen extends StatelessWidget {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.balances});
+  const _Summary({required this.app, required this.balances});
+  final AppState app;
   final List<AccountBalance> balances;
+
+  Future<void> _editRate(BuildContext context, String currency, FxRate? current) async {
+    final text = await askText(
+      context,
+      title: '$currency 匯率',
+      label: '1 $currency = 多少新台幣',
+      initial: current?.manual ?? false ? current!.rate.toString() : '',
+      message: '只用來換算淨資產。留空就用最近一筆紀錄的匯率。',
+    );
+    if (!context.mounted) return;
+    final rate = Decimal.tryParse(text ?? '');
+    app.setManualRate(currency, rate != null && rate > Decimal.zero ? rate : null);
+  }
 
   @override
   Widget build(BuildContext context) {
-    var local = Decimal.zero;
-    final foreign = <String, Decimal>{};
-    for (final b in balances) {
-      final c = b.account.currency;
-      if (c == baseCurrency) {
-        local += b.current;
-      } else {
-        foreign[c] = (foreign[c] ?? Decimal.zero) + b.current;
-      }
-    }
+    final rates = app.rates;
+    final s = summarizeAssets(balances, rates);
     final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final positive = [
+      for (final e in s.byType.entries)
+        if (e.value > Decimal.zero) e,
+    ]..sort((a, b) => b.value.compareTo(a.value));
+    final negative = [
+      for (final e in s.byType.entries)
+        if (e.value < Decimal.zero) e,
+    ];
+    final currencies = {
+      for (final b in balances)
+        if (b.account.currency != baseCurrency && b.account.currency != unknownCurrency) b.account.currency,
+    };
     return Card(
       margin: const EdgeInsets.all(16),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('台幣帳戶合計', style: theme.textTheme.labelLarge),
+            Text('淨資產', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Text(formatMoney(s.net.round(scale: 0)), key: const Key('netWorth'), style: theme.textTheme.headlineMedium),
             const SizedBox(height: 4),
             Text(
-              formatMoney(local),
-              key: const Key('netWorth'),
-              style: theme.textTheme.headlineMedium,
+              '資產 ${formatMoney(s.assets.round(scale: 0))}・負債 ${formatMoney(s.liabilities.round(scale: 0))}',
+              key: const Key('assetsLiabilities'),
+              style: muted,
             ),
-            if (foreign.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                '外幣：${foreign.entries.map((e) => formatMoney(e.value, currency: e.key)).join('、')}',
-                style: theme.textTheme.bodyMedium,
+            if (positive.isNotEmpty || negative.isNotEmpty) const SizedBox(height: 12),
+            for (final e in [...positive, ...negative])
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(accountTypeLabels[e.key]!)),
+                        Text(formatMoney(e.value.round(scale: 0)), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    if (e.value > Decimal.zero) ...[
+                      const SizedBox(height: 4),
+                      ShareBar(fraction: fractionOf(e.value, s.assets)),
+                    ],
+                  ],
+                ),
               ),
+            if (currencies.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (final c in currencies.toList()..sort())
+                InkWell(
+                  key: Key('rate-$c'),
+                  onTap: () => _editRate(context, c, rates[c]),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(switch (rates[c]) {
+                            null => '$c：沒有匯率，點這裡輸入',
+                            FxRate(:final rate, manual: true) => '1 $c = NT\$$rate（自訂）',
+                            FxRate(:final rate, :final asOf) => '1 $c = NT\$$rate（${formatDate(asOf!)} 的紀錄）',
+                          }, style: muted),
+                        ),
+                        Icon(Icons.edit_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                      ],
+                    ),
+                  ),
+                ),
             ],
+            if (s.unconverted.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('沒有算進去：${s.unconverted.map((a) => a.name).join('、')}（幣別或匯率未知）', style: muted),
+              ),
           ],
         ),
       ),

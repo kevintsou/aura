@@ -198,9 +198,11 @@ void main() {
       await tester.pumpWidget(AuraApp(app: await imported(tester)));
       await tester.tap(find.text('帳戶'));
       await tester.pumpAndSettle();
-      // TWD accounts: 2,880 − 25,645 − 1,865 + 100,000 − 1,874.5
-      expect(find.text('NT\$73,495.5'), findsOneWidget);
-      expect(find.text('外幣：-USD 1,000、-JPY 10,000'), findsOneWidget);
+      // TWD accounts: 2,880 − 25,645 − 1,865 + 100,000 − 1,874.5 = 73,495.5;
+      // −1,000 USD at 32.37 and −10,000 JPY at 0.201 (their newest records).
+      expect(tester.widget<Text>(find.byKey(const Key('netWorth'))).data, 'NT\$39,116');
+      expect(find.text('1 USD = NT\$32.37（2026/09/22 的紀錄）'), findsOneWidget);
+      expect(find.text('1 JPY = NT\$0.201（2026/09/20 的紀錄）'), findsOneWidget);
       expect(find.textContaining('有 7 個帳戶還沒設定餘額'), findsOneWidget);
     });
 
@@ -297,16 +299,17 @@ void main() {
       expect(find.text('證券'), findsNothing, reason: 'no securities left');
     });
 
-    testWidgets('changing the currency moves it out of the TWD total', (tester) async {
+    testWidgets('changing the currency relabels the balance without converting it', (tester) async {
       final app = await openAccount(tester, '定存-測試');
       await choose(tester, const Key('accountCurrency'), 'USD 美元');
       expect(find.text('只會更改幣別標示，金額數字不會換算。'), findsOneWidget);
       await tester.tap(find.byKey(const Key('saveAccount')));
       await tester.pumpAndSettle();
       expect(app.ledger.accounts.firstWhere((a) => a.name == '定存-測試').currency, 'USD');
-      // 73,495.5 − 100,000 moves out of TWD; USD −1,000 + 100,000.
-      expect(find.text('-NT\$26,504.5'), findsOneWidget);
-      expect(find.text('外幣：USD 99,000、-JPY 10,000'), findsOneWidget);
+      // Its records were in NT$, so the newest "USD" record now implies a
+      // rate of 1: TWD −26,504.5, USD 99,000 × 1, JPY −2,010.
+      expect(find.text('1 USD = NT\$1（2026/09/23 的紀錄）'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const Key('netWorth'))).data, 'NT\$70,486');
     });
 
     testWidgets('any ISO code can be typed; invalid ones cannot be saved', (tester) async {

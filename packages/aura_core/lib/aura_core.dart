@@ -2,6 +2,7 @@
 library;
 
 export 'src/backup.dart';
+export 'src/assets.dart';
 export 'src/balance.dart';
 export 'src/budget.dart';
 export 'src/defaults.dart';

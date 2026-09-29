@@ -1,5 +1,6 @@
 import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
+import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart' hide Category;
 
 import 'cloud/cloud_backup.dart';
@@ -154,6 +155,32 @@ class AppState extends ChangeNotifier {
       _balancesRevision = revision;
     }
     return _balances!;
+  }
+
+  Map<String, FxRate>? _rates;
+  int _ratesRevision = -1;
+
+  /// Exchange rates for foreign accounts: set by the user, else from the
+  /// newest record in each currency.
+  Map<String, FxRate> get rates {
+    if (_rates == null || _ratesRevision != revision) {
+      _rates = knownRates(
+        ledger,
+        manual: {
+          for (final e in ledger.allMeta().entries)
+            if (e.key.startsWith('fx.')) e.key.substring(3): e.value,
+        },
+      );
+      _ratesRevision = revision;
+    }
+    return _rates!;
+  }
+
+  /// Sets (or with null, clears) the rate used for [currency].
+  void setManualRate(String currency, Decimal? rate) {
+    ledger.setMeta(fxMetaKey(currency), rate?.toString());
+    revision++;
+    notifyListeners();
   }
 
   /// Runs a ledger write; returns the user-facing error message instead

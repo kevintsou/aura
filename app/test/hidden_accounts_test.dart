@@ -83,7 +83,7 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pumpAndSettle();
     expect(app.revealHidden, isTrue);
-    expect(find.text('現金'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '現金'), findsOneWidget);
 
     // Locking the app hides them again.
     await lock.setTimeout(LockTimeout.immediately);
