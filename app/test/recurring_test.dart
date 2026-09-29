@@ -132,7 +132,8 @@ void main() {
     expect(app.ledger.recurrings, isEmpty);
     expect(app.ledger.count(), 3);
     expect(app.ledger.transactions().every((t) => t.recurringId == null), isTrue);
-    expect(find.text('還沒有週期收支'), findsOneWidget);
+    // The three rent records left behind now look like a pattern again.
+    expect(find.text('看起來是固定收支'), findsOneWidget);
   });
 
   testWidgets('a recorded occurrence links to its recurring item', (tester) async {

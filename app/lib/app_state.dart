@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
 import 'package:decimal/decimal.dart';
@@ -577,6 +579,32 @@ class AppState extends ChangeNotifier {
   }
 
   void deleteRecurring(String recurringId) => write((l) => l.deleteRecurring(recurringId));
+
+  static const _metaDismissed = 'recurring.dismissed';
+
+  Set<String> get _dismissedCandidates => switch (ledger.meta(_metaDismissed)) {
+    final String s => {...(jsonDecode(s) as List).cast<String>()},
+    _ => {},
+  };
+
+  List<RecurringCandidate>? _candidates;
+  int _candidatesRevision = -1;
+
+  /// Repeating records in the history that are not recurring items yet.
+  List<RecurringCandidate> get recurringCandidates {
+    if (_candidates == null || _candidatesRevision != revision) {
+      _candidates = detectRecurring(view, today: clock(), dismissed: _dismissedCandidates);
+      _candidatesRevision = revision;
+    }
+    return _candidates!;
+  }
+
+  /// Turns a detected pattern into a recurring item from its next date.
+  String? adoptCandidate(RecurringCandidate c) => saveRecurring(c.toRecurring(newId('r'))).$1;
+
+  /// Stops suggesting [c].
+  void dismissCandidate(RecurringCandidate c) =>
+      write((l) => l.setMeta(_metaDismissed, jsonEncode([..._dismissedCandidates, c.key])));
 
   /// Adds or changes a budget; returns the user-facing error, if any.
   String? setBudget(Budget budget) => write((l) => l.setBudget(budget));
