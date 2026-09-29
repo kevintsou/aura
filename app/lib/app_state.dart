@@ -48,6 +48,10 @@ Future<Uint8List> _encode(
   iterations: job.iterations,
 );
 
+Future<CwmExportResult> _exportCwm(
+  ({InMemoryLedger ledger, DateTime? from, DateTime? to, bool includeCarrier}) job,
+) async => exportCwmoneyCsv(job.ledger, from: job.from, to: job.to, includeCarrier: job.includeCarrier);
+
 Future<BackupContents> _decode(({List<int> bytes, String? password}) job) =>
     decodeBackup(job.bytes, password: job.password);
 
@@ -334,6 +338,22 @@ class AppState extends ChangeNotifier {
     ledger.setMeta(_metaLastBackup, now.toIso8601String());
     notifyListeners();
     return name;
+  }
+
+  /// Writes the ledger (or [from]–[to]) as a CWMoney CSV and lets the
+  /// user choose where to save it. Null when they cancelled.
+  Future<(String, CwmExportResult)?> exportCwmoney({DateTime? from, DateTime? to, bool includeCarrier = false}) async {
+    final result = await compute(_exportCwm, (
+      ledger: _detached(ledger),
+      from: from,
+      to: to,
+      includeCarrier: includeCarrier,
+    ));
+    final now = clock();
+    // CWMoney's own naming, so the file is easy to recognise.
+    final name = 'cwmoney_ex2_db_CSV_${now.year}${_two(now.month)}${_two(now.day)}.csv';
+    if (!await lock.whileAway(() => files.save(name, result.bytes, title: '儲存 CWMoney CSV'))) return null;
+    return (name, result);
   }
 
   /// Replaces the ledger with a backup, after keeping a snapshot of the

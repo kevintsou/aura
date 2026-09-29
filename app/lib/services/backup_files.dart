@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 /// Drive, iCloud Drive and so on.
 abstract interface class BackupFiles {
   /// False when the user cancelled.
-  Future<bool> save(String fileName, Uint8List bytes);
+  Future<bool> save(String fileName, Uint8List bytes, {String title = '儲存備份檔'});
 
   /// Null when the user cancelled.
   Future<({String name, Uint8List bytes})?> pick({String title = '選擇備份檔'});
@@ -14,11 +14,11 @@ abstract interface class BackupFiles {
 
 class DeviceBackupFiles implements BackupFiles {
   @override
-  Future<bool> save(String fileName, Uint8List bytes) async {
+  Future<bool> save(String fileName, Uint8List bytes, {String title = '儲存備份檔'}) async {
     final uri = await FilePicker.saveFile(
       fileName: fileName,
       bytes: bytes,
-      dialogTitle: '儲存備份檔',
+      dialogTitle: title,
     );
     // The web starts a download and never learns where it went, so it
     // always returns null; on devices null means the user cancelled.

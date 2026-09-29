@@ -32,7 +32,7 @@ class _Files implements BackupFiles {
   ({String name, Uint8List bytes})? toPick;
 
   @override
-  Future<bool> save(String fileName, Uint8List bytes) async => true;
+  Future<bool> save(String fileName, Uint8List bytes, {String title = ''}) async => true;
 
   @override
   Future<({String name, Uint8List bytes})?> pick({String title = ''}) async => toPick;

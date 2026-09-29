@@ -7,6 +7,7 @@ import 'ai_settings_screen.dart';
 import 'backup_screen.dart';
 import 'budgets_screen.dart';
 import 'categories_screen.dart';
+import 'export_action.dart';
 import 'import_action.dart';
 import 'recurring_screen.dart';
 
@@ -108,6 +109,14 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('匯入 CWMoney CSV'),
             subtitle: Text(app.importedFileName ?? 'CWMoney 經典版匯出的 CSV'),
             onTap: () => importCwmoneyFile(context, app),
+          ),
+          ListTile(
+            key: const Key('exportCwmoney'),
+            leading: const Icon(Icons.ios_share),
+            title: const Text('匯出 CWMoney CSV'),
+            subtitle: const Text('CWMoney 經典版的格式，也可以用 Excel 開'),
+            enabled: app.ledger.count() > 0,
+            onTap: () => exportCwmoneyFile(context, app),
           ),
           const Divider(),
           const AboutListTile(

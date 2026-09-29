@@ -21,7 +21,7 @@ class _FakeFiles implements BackupFiles {
   ({String name, Uint8List bytes})? toPick;
 
   @override
-  Future<bool> save(String fileName, Uint8List bytes) async {
+  Future<bool> save(String fileName, Uint8List bytes, {String title = ''}) async {
     savedName = fileName;
     saved = bytes;
     return true;
