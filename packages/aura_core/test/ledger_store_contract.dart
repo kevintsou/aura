@@ -1,0 +1,270 @@
+// Behaviour every LedgerStore must have. Run by aura_core (in memory) and
+// aura_store (SQLite) so both stores stay interchangeable.
+import 'package:aura_core/aura_core.dart';
+import 'package:decimal/decimal.dart';
+import 'package:test/test.dart';
+
+void ledgerStoreContract(LedgerStore Function() create) {
+  late LedgerStore l;
+  late Account cash, bank;
+  late Category food, lunch, salaryMain, salary;
+
+  Txn expense(
+    String id, {
+    String amount = '120',
+    DateTime? date,
+    String? categoryId,
+    String? accountId,
+  }) => Txn(
+    id: id,
+    kind: TxnKind.expense,
+    date: date ?? DateTime(2026, 9, 1),
+    accountId: accountId ?? cash.id,
+    amount: Decimal.parse(amount),
+    baseAmount: Decimal.parse(amount),
+    categoryId: categoryId ?? lunch.id,
+    createdAt: DateTime(2026, 9, 1, 12),
+  );
+
+  setUp(() {
+    l = create();
+    cash = defaultCashAccount();
+    bank = Account(
+      id: newId('a'),
+      name: '銀行',
+      type: AccountType.bank,
+      currency: baseCurrency,
+    );
+    food = Category(id: 'food', kind: TxnKind.expense, name: '生活費');
+    lunch = Category(id: 'lunch', kind: TxnKind.expense, name: '午餐', parentId: 'food');
+    salaryMain = Category(id: 'work', kind: TxnKind.income, name: '工作收入');
+    salary = Category(id: 'salary', kind: TxnKind.income, name: '薪資', parentId: 'work');
+    l
+      ..addAccount(cash)
+      ..addAccount(bank);
+    for (final c in [food, lunch, salaryMain, salary]) {
+      l.addCategory(c);
+    }
+  });
+  tearDown(() => l.close());
+
+  group('accounts', () {
+    test('add, rename, archive', () {
+      expect(l.accounts.map((a) => a.name), ['現金', '銀行']);
+      l.updateAccount(bank.id, name: '郵局', archived: true);
+      final a = l.account(bank.id)!;
+      expect((a.name, a.archived, a.type), ('郵局', true, AccountType.bank));
+      l.updateAccount(bank.id, archived: false);
+      expect(l.account(bank.id)!.archived, isFalse);
+    });
+
+    test('names are unique and required', () {
+      expect(
+        () => l.addAccount(
+          const Account(id: 'x', name: '銀行', type: AccountType.cash, currency: 'TWD'),
+        ),
+        throwsArgumentError,
+      );
+      expect(() => l.updateAccount(cash.id, name: '銀行'), throwsArgumentError);
+      expect(() => l.updateAccount(cash.id, name: ' '), throwsArgumentError);
+      l.updateAccount(cash.id, name: '現金'); // its own name is fine
+    });
+
+    test('only unused accounts can be deleted', () {
+      l.addTxn(expense('t1'));
+      expect(() => l.deleteAccount(cash.id), throwsStateError);
+      l.deleteAccount(bank.id);
+      expect(l.account(bank.id), isNull);
+    });
+  });
+
+  group('categories', () {
+    test('new ones go after their siblings', () {
+      l.addCategory(Category(id: 'dinner', kind: TxnKind.expense, name: '晚餐', parentId: 'food'));
+      expect(
+        l.categories.where((c) => c.parentId == 'food').map((c) => c.name),
+        ['午餐', '晚餐'],
+      );
+    });
+
+    test('rename checks siblings for duplicates', () {
+      l.addCategory(Category(id: 'dinner', kind: TxnKind.expense, name: '晚餐', parentId: 'food'));
+      expect(() => l.renameCategory('dinner', '午餐'), throwsArgumentError);
+      l.renameCategory('dinner', '宵夜');
+      expect(l.category('dinner')!.name, '宵夜');
+      // The same name under another parent or kind is fine.
+      l.addCategory(Category(id: 'x', kind: TxnKind.income, name: '午餐', parentId: 'work'));
+    });
+
+    test('subcategories must sit under a main category of the same kind', () {
+      expect(
+        () => l.addCategory(Category(id: 'x', kind: TxnKind.income, name: 'x', parentId: 'food')),
+        throwsArgumentError,
+      );
+      expect(
+        () => l.addCategory(Category(id: 'x', kind: TxnKind.expense, name: 'x', parentId: 'lunch')),
+        throwsArgumentError,
+      );
+    });
+
+    test('deleting a main category removes its unused subcategories', () {
+      l.deleteCategory('food');
+      expect(l.category('food'), isNull);
+      expect(l.category('lunch'), isNull);
+    });
+
+    test('used categories cannot be deleted, directly or via the parent', () {
+      l.addTxn(expense('t1'));
+      expect(() => l.deleteCategory('lunch'), throwsStateError);
+      expect(() => l.deleteCategory('food'), throwsStateError);
+    });
+
+    test('reorder moves siblings within their slots', () {
+      l
+        ..addCategory(Category(id: 'dinner', kind: TxnKind.expense, name: '晚餐', parentId: 'food'))
+        ..addCategory(Category(id: 'car', kind: TxnKind.expense, name: '交通'))
+        ..reorderCategories(['car', 'food']);
+      final mains = l.categories.where((c) => c.parentId == null && c.kind == TxnKind.expense);
+      expect(mains.map((c) => c.id), ['car', 'food']);
+      l.reorderCategories(['dinner', 'lunch']);
+      expect(
+        l.categories.where((c) => c.parentId == 'food').map((c) => c.id),
+        ['dinner', 'lunch'],
+      );
+    });
+  });
+
+  group('transactions', () {
+    test('add, update and delete, keeping newest-first order', () {
+      l
+        ..addTxn(expense('old', date: DateTime(2026, 8, 1)))
+        ..addTxn(expense('new', date: DateTime(2026, 9, 2)));
+      expect(l.transactions().map((t) => t.id), ['new', 'old']);
+
+      l.updateTxn(expense('old', amount: '99', date: DateTime(2026, 9, 3)));
+      expect(l.transactions().map((t) => t.id), ['old', 'new']);
+      expect(l.transactions().first.amount, Decimal.fromInt(99));
+
+      l.deleteTxn('new');
+      expect(l.transactions().map((t) => t.id), ['old']);
+      expect(() => l.deleteTxn('new'), throwsArgumentError);
+      expect(() => l.updateTxn(expense('ghost')), throwsArgumentError);
+    });
+
+    test('ids must be new', () {
+      l.addTxn(expense('t1'));
+      expect(() => l.addTxn(expense('t1')), throwsArgumentError);
+    });
+
+    test('balances follow manual records', () {
+      l
+        ..addTxn(expense('t1', amount: '120'))
+        ..addTxn(
+          Txn(
+            id: 't2',
+            kind: TxnKind.income,
+            date: DateTime(2026, 9, 1),
+            accountId: bank.id,
+            amount: Decimal.fromInt(50000),
+            baseAmount: Decimal.fromInt(50000),
+            categoryId: salary.id,
+          ),
+        )
+        ..addTxn(
+          Txn(
+            id: 't3',
+            kind: TxnKind.transfer,
+            date: DateTime(2026, 9, 2),
+            accountId: bank.id,
+            toAccountId: cash.id,
+            amount: Decimal.fromInt(3000),
+            baseAmount: Decimal.fromInt(3000),
+          ),
+        );
+      final b = computeBalances(l, today: DateTime(2026, 9, 30));
+      expect(b[cash.id]!.current, Decimal.fromInt(2880));
+      expect(b[bank.id]!.current, Decimal.fromInt(47000));
+    });
+
+    test('rejects records that break the rules', () {
+      expect(() => l.addTxn(expense('t', categoryId: salary.id)), throwsArgumentError);
+      expect(() => l.addTxn(expense('t', accountId: 'ghost')), throwsArgumentError);
+      expect(
+        () => l.addTxn(
+          Txn(
+            id: 't',
+            kind: TxnKind.transfer,
+            date: DateTime(2026),
+            accountId: cash.id,
+            toAccountId: cash.id,
+            amount: Decimal.one,
+            baseAmount: Decimal.one,
+          ),
+        ),
+        throwsArgumentError,
+      );
+      expect(l.count(), 0);
+    });
+
+    test('deleting a transfer unlinks its fee', () {
+      l.addTxn(
+        Txn(
+          id: 'tr',
+          kind: TxnKind.transfer,
+          date: DateTime(2026, 9, 2),
+          accountId: bank.id,
+          toAccountId: cash.id,
+          amount: Decimal.fromInt(3000),
+          baseAmount: Decimal.fromInt(3000),
+        ),
+      );
+      l.addCategory(Category(id: 'fee', kind: TxnKind.expense, name: '手續費', parentId: 'food'));
+      l.addTxn(
+        Txn(
+          id: 'fee1',
+          kind: TxnKind.expense,
+          date: DateTime(2026, 9, 2),
+          accountId: bank.id,
+          amount: Decimal.fromInt(15),
+          baseAmount: Decimal.fromInt(15),
+          categoryId: 'fee',
+          feeOfTxnId: 'tr',
+        ),
+      );
+      l.deleteTxn('tr');
+      expect(l.transactions().single.feeOfTxnId, isNull);
+    });
+  });
+
+  test('projects can be added once per name', () {
+    l.addProject(const Project(id: 'p1', name: '旅遊'));
+    expect(() => l.addProject(const Project(id: 'p2', name: '旅遊')), throwsArgumentError);
+    l.addTxn(
+      Txn(
+        id: 't',
+        kind: TxnKind.expense,
+        date: DateTime(2026),
+        accountId: cash.id,
+        amount: Decimal.one,
+        baseAmount: Decimal.one,
+        categoryId: lunch.id,
+        projectId: 'p1',
+      ),
+    );
+    expect(l.transactions().single.projectId, 'p1');
+  });
+
+  test('default categories are valid and ordered parents first', () {
+    final defaults = defaultCategories();
+    final fresh = create();
+    addTearDown(fresh.close);
+    // Throws if a child came before its parent or a name repeated.
+    defaults.forEach(fresh.addCategory);
+    expect(fresh.categories.where((c) => c.name == '早餐'), hasLength(1));
+    expect(fresh.categories.map((c) => c.id), defaults.map((c) => c.id));
+    expect(
+      defaults.where((c) => c.kind == TxnKind.income && c.parentId == null).map((c) => c.name),
+      ['工作收入', '現金流', '其他收入'],
+    );
+  });
+}

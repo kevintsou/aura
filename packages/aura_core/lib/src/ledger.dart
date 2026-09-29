@@ -69,9 +69,39 @@ abstract interface class LedgerStore implements LedgerReader {
   /// Sets or clears an account's known balance.
   void setBalanceAnchor(String accountId, BalanceAnchor? anchor);
 
-  /// Corrects what the importer guessed about an account. Amounts are
-  /// not converted: they were always in the account's real currency.
-  void updateAccount(String accountId, {AccountType? type, String? currency});
+  /// Changes an account's details. Changing the currency relabels it;
+  /// amounts are not converted (they were always in the real currency).
+  void updateAccount(
+    String accountId, {
+    String? name,
+    AccountType? type,
+    String? currency,
+    bool? archived,
+  });
+
+  void addAccount(Account account);
+
+  /// Only for accounts without records; archive used ones instead.
+  void deleteAccount(String accountId);
+
+  /// Appended after its siblings.
+  void addCategory(Category category);
+  void renameCategory(String categoryId, String name);
+
+  /// Only for categories no record uses; removes its subcategories too.
+  void deleteCategory(String categoryId);
+
+  /// Reorders sibling categories: [ids] take the positions they occupy
+  /// now, in the given order.
+  void reorderCategories(List<String> ids);
+
+  void addProject(Project project);
+
+  void addTxn(Txn txn);
+
+  /// Replaces the transaction with the same id.
+  void updateTxn(Txn txn);
+  void deleteTxn(String txnId);
 
   /// Small key/value settings kept with the data (e.g. last import).
   String? meta(String key);
@@ -133,13 +163,114 @@ class InMemoryLedger implements LedgerStore {
   }
 
   @override
-  void updateAccount(String accountId, {AccountType? type, String? currency}) {
+  void updateAccount(
+    String accountId, {
+    String? name,
+    AccountType? type,
+    String? currency,
+    bool? archived,
+  }) {
     final account = _accounts[accountId];
     if (account == null) throw ArgumentError.value(accountId, 'accountId');
-    if (currency != null && !isCurrencyCode(currency)) {
-      throw ArgumentError.value(currency, 'currency');
+    checkAccountDetails(this, name: name, currency: currency, id: accountId);
+    _accounts[accountId] = account.copyWith(
+      name: name,
+      type: type,
+      currency: currency,
+      archived: archived,
+    );
+  }
+
+  @override
+  void addAccount(Account account) {
+    checkNewId(_accounts.containsKey(account.id), account.id);
+    checkAccountDetails(this, name: account.name, currency: account.currency);
+    _accounts[account.id] = account;
+  }
+
+  @override
+  void deleteAccount(String accountId) {
+    if (!_accounts.containsKey(accountId)) {
+      throw ArgumentError.value(accountId, 'accountId');
     }
-    _accounts[accountId] = account.copyWith(type: type, currency: currency);
+    checkUnused(count(TxnFilter(accountIds: {accountId})), '帳戶');
+    _accounts.remove(accountId);
+  }
+
+  @override
+  void addCategory(Category category) {
+    checkNewId(_categories.containsKey(category.id), category.id);
+    checkCategory(this, category);
+    _categories[category.id] = category;
+  }
+
+  @override
+  void renameCategory(String categoryId, String name) {
+    final c = _categories[categoryId];
+    if (c == null) throw ArgumentError.value(categoryId, 'categoryId');
+    final renamed = c.renamed(name);
+    checkCategory(this, renamed);
+    _categories[categoryId] = renamed;
+  }
+
+  @override
+  void deleteCategory(String categoryId) {
+    if (!_categories.containsKey(categoryId)) {
+      throw ArgumentError.value(categoryId, 'categoryId');
+    }
+    checkUnused(count(TxnFilter(categoryIds: {categoryId})), '分類');
+    _categories.removeWhere(
+      (id, c) => id == categoryId || c.parentId == categoryId,
+    );
+  }
+
+  @override
+  void reorderCategories(List<String> ids) {
+    final order = [..._categories.keys];
+    final slots = [
+      for (final (i, id) in order.indexed)
+        if (ids.contains(id)) i,
+    ];
+    if (slots.length != ids.length) throw ArgumentError.value(ids, 'ids');
+    for (final (k, slot) in slots.indexed) {
+      order[slot] = ids[k];
+    }
+    _categories = {for (final id in order) id: _categories[id]!};
+  }
+
+  @override
+  void addProject(Project project) {
+    checkNewId(_projects.containsKey(project.id), project.id);
+    if (_projects.values.any((p) => p.name == project.name)) {
+      throw ArgumentError.value(project.name, 'name', '專案名稱重複');
+    }
+    _projects[project.id] = project;
+  }
+
+  @override
+  void addTxn(Txn txn) {
+    checkNewId(_txns.any((t) => t.id == txn.id), txn.id);
+    checkTxn(this, txn);
+    _load(accounts, categories, projects, [..._txns, txn]);
+  }
+
+  @override
+  void updateTxn(Txn txn) {
+    final i = _txns.indexWhere((t) => t.id == txn.id);
+    if (i < 0) throw ArgumentError.value(txn.id, 'txn.id');
+    checkTxn(this, txn);
+    _load(accounts, categories, projects, [..._txns]..[i] = txn);
+  }
+
+  @override
+  void deleteTxn(String txnId) {
+    if (!_txns.any((t) => t.id == txnId)) {
+      throw ArgumentError.value(txnId, 'txnId');
+    }
+    _txns = [
+      for (final t in _txns)
+        if (t.id != txnId) t.feeOfTxnId == txnId ? t.withoutFeeLink() : t,
+    ];
   }
 
   @override
@@ -229,5 +360,87 @@ class InMemoryLedger implements LedgerStore {
         has(t.place) ||
         has(invoice?.sellerName) ||
         (includeItems && (invoice?.items.any((i) => has(i.name)) ?? false));
+  }
+}
+
+/// Shared validation for [LedgerStore] implementations, so every store
+/// enforces the same rules. Messages are shown to users.
+void checkNewId(bool exists, String id) {
+  if (exists) throw ArgumentError.value(id, 'id', 'id 已存在');
+}
+
+void checkUnused(int uses, String what) {
+  if (uses > 0) {
+    throw StateError('這個$what有 $uses 筆紀錄，無法刪除');
+  }
+}
+
+void checkAccountDetails(
+  LedgerReader ledger, {
+  String? name,
+  String? currency,
+  String? id,
+}) {
+  if (name != null) {
+    if (name.trim().isEmpty) {
+      throw ArgumentError.value(name, 'name', '請輸入帳戶名稱');
+    }
+    if (ledger.accounts.any((a) => a.name == name && a.id != id)) {
+      throw ArgumentError.value(name, 'name', '已經有同名的帳戶');
+    }
+  }
+  if (currency != null && !isCurrencyCode(currency)) {
+    throw ArgumentError.value(currency, 'currency', '幣別代碼要是三個英文字母');
+  }
+}
+
+void checkCategory(LedgerReader ledger, Category c) {
+  if (c.kind == TxnKind.transfer) {
+    throw ArgumentError.value(c.kind, 'kind', '轉帳沒有分類');
+  }
+  if (c.name.trim().isEmpty) {
+    throw ArgumentError.value(c.name, 'name', '請輸入分類名稱');
+  }
+  if (c.parentId != null) {
+    final parent = ledger.category(c.parentId!);
+    if (parent == null || parent.parentId != null || parent.kind != c.kind) {
+      throw ArgumentError.value(c.parentId, 'parentId', '子分類只能放在同類型的主分類下');
+    }
+  }
+  if (ledger.categories.any(
+    (o) =>
+        o.id != c.id &&
+        o.kind == c.kind &&
+        o.parentId == c.parentId &&
+        o.name == c.name,
+  )) {
+    throw ArgumentError.value(c.name, 'name', '已經有同名的分類');
+  }
+}
+
+void checkTxn(LedgerReader ledger, Txn t) {
+  void account(String? id) {
+    if (id != null && ledger.account(id) == null) {
+      throw ArgumentError.value(id, 'accountId', '帳戶不存在');
+    }
+  }
+
+  account(t.accountId);
+  account(t.toAccountId);
+  if (t.kind == TxnKind.transfer) {
+    if (t.accountId != null && t.accountId == t.toAccountId) {
+      throw ArgumentError.value(t.toAccountId, 'toAccountId', '轉出和轉入不能是同一個帳戶');
+    }
+    if (t.categoryId != null) {
+      throw ArgumentError.value(t.categoryId, 'categoryId', '轉帳沒有分類');
+    }
+  } else if (t.categoryId != null) {
+    final c = ledger.category(t.categoryId!);
+    if (c == null || c.kind != t.kind) {
+      throw ArgumentError.value(t.categoryId, 'categoryId', '分類和收支類型不符');
+    }
+  }
+  if (t.projectId != null && ledger.project(t.projectId!) == null) {
+    throw ArgumentError.value(t.projectId, 'projectId', '專案不存在');
   }
 }

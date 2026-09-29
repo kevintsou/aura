@@ -43,6 +43,7 @@ class SqliteLedger implements LedgerStore {
           name: r['name'] as String,
           type: AccountType.values.byName(r['type'] as String),
           currency: r['currency'] as String,
+          archived: (r['archived'] as int) != 0,
           anchor: r['anchor_amount'] == null
               ? null
               : BalanceAnchor(
@@ -120,18 +121,23 @@ class SqliteLedger implements LedgerStore {
   }
 
   @override
-  void updateAccount(String accountId, {AccountType? type, String? currency}) {
-    if (currency != null && !isCurrencyCode(currency)) {
-      throw ArgumentError.value(currency, 'currency');
-    }
-    _db.execute(
-      'UPDATE accounts SET type = coalesce(?, type), '
-      'currency = coalesce(?, currency) WHERE id = ?',
-      [type?.name, currency, accountId],
-    );
-    if (_db.updatedRows == 0) {
+  void updateAccount(
+    String accountId, {
+    String? name,
+    AccountType? type,
+    String? currency,
+    bool? archived,
+  }) {
+    if (!_accounts.containsKey(accountId)) {
       throw ArgumentError.value(accountId, 'accountId');
     }
+    checkAccountDetails(this, name: name, currency: currency, id: accountId);
+    _db.execute(
+      'UPDATE accounts SET name = coalesce(?, name), type = coalesce(?, type), '
+      'currency = coalesce(?, currency), archived = coalesce(?, archived) '
+      'WHERE id = ?',
+      [name, type?.name, currency, archived == null ? null : (archived ? 1 : 0), accountId],
+    );
     _loadReferenceData();
   }
 
@@ -304,8 +310,7 @@ class SqliteLedger implements LedgerStore {
 
   @override
   void replaceAll(LedgerReader source) {
-    _db.execute('BEGIN IMMEDIATE');
-    try {
+    _atomic(() {
       for (final table in const [
         'invoice_items', 'invoices', 'txns', 'categories', 'projects', //
         'accounts',
@@ -313,11 +318,7 @@ class SqliteLedger implements LedgerStore {
         _db.execute('DELETE FROM $table');
       }
       _insertAll(source);
-      _db.execute('COMMIT');
-    } catch (_) {
-      _db.execute('ROLLBACK');
-      rethrow;
-    }
+    });
     _loadReferenceData();
   }
 
@@ -334,20 +335,7 @@ class SqliteLedger implements LedgerStore {
       }
     }
 
-    each(
-      'INSERT INTO accounts (id, name, type, currency, sort, anchor_amount, '
-      'anchor_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      source.accounts,
-      (a, i) => [
-        a.id,
-        a.name,
-        a.type.name,
-        a.currency,
-        i,
-        a.anchor?.amount.toString(),
-        a.anchor == null ? null : formatIsoDate(a.anchor!.date),
-      ],
-    );
+    each(_insertAccount, source.accounts, _accountArgs);
     each(
       'INSERT INTO projects (id, name, sort) VALUES (?, ?, ?)',
       source.projects,
@@ -359,61 +347,166 @@ class SqliteLedger implements LedgerStore {
       ...source.categories.where((c) => c.parentId != null),
     ];
     final order = {for (final (i, c) in source.categories.indexed) c.id: i};
-    each(
-      'INSERT INTO categories (id, kind, name, parent_id, sort) VALUES (?, ?, ?, ?, ?)',
-      cats,
-      (c, _) => [c.id, c.kind.name, c.name, c.parentId, order[c.id]],
-    );
+    each(_insertCategory, cats, (c, _) => _categoryArgs(c, order[c.id]!));
     final txns = source.transactions();
-    each(
-      'INSERT INTO txns (id, kind, date, account_id, to_account_id, amount, '
-      'to_amount, base_amount, fx_rate_display, category_id, project_id, note, '
-      'place, created_at, fee_of_txn_id, needs_review, legacy_rows) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      txns,
-      (t, _) => [
-        t.id,
-        t.kind.name,
-        formatIsoDate(t.date),
-        t.accountId,
-        t.toAccountId,
-        t.amount.toString(),
-        t.toAmount?.toString(),
-        t.baseAmount.toString(),
-        t.fxRateDisplay,
-        t.categoryId,
-        t.projectId,
-        t.note,
-        t.place,
-        t.createdAt == null ? null : _isoDateTime(t.createdAt!),
-        t.feeOfTxnId,
-        t.needsReview ? 1 : 0,
-        t.legacyRows.isEmpty ? null : jsonEncode(t.legacyRows),
-      ],
-    );
+    each(_insertTxn, txns, (t, _) => _txnArgs(t));
     final withInvoice = txns.where((t) => t.invoice != null);
+    each(_insertInvoice, withInvoice, (t, _) => _invoiceArgs(t));
     each(
-      'INSERT INTO invoices (txn_id, number, seller_tax_id, seller_name, '
-      'seller_address, carrier) VALUES (?, ?, ?, ?, ?, ?)',
-      withInvoice,
-      (t, _) => [
-        t.id,
-        t.invoice!.number,
-        t.invoice!.sellerTaxId,
-        t.invoice!.sellerName,
-        t.invoice!.sellerAddress,
-        t.invoice!.carrier,
-      ],
-    );
-    each(
-      'INSERT INTO invoice_items (txn_id, position, name, quantity, amount) '
-      'VALUES (?, ?, ?, ?, ?)',
+      _insertItem,
       [
         for (final t in withInvoice)
           for (final (i, item) in t.invoice!.items.indexed) (t.id, i, item),
       ],
-      (e, _) => [e.$1, e.$2, e.$3.name, e.$3.quantity.toString(), e.$3.amount.toString()],
+      (e, _) => _itemArgs(e.$1, e.$2, e.$3),
     );
+  }
+
+  /// Runs [body] atomically; rethrows after rolling back.
+  void _atomic(void Function() body) {
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      body();
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  int _nextSort(String table) =>
+      (_db.select('SELECT coalesce(max(sort), -1) + 1 AS n FROM $table').first['n'] as int);
+
+  @override
+  void addAccount(Account account) {
+    checkNewId(_accounts.containsKey(account.id), account.id);
+    checkAccountDetails(this, name: account.name, currency: account.currency);
+    _db.execute(_insertAccount, _accountArgs(account, _nextSort('accounts')));
+    _loadReferenceData();
+  }
+
+  @override
+  void deleteAccount(String accountId) {
+    if (!_accounts.containsKey(accountId)) {
+      throw ArgumentError.value(accountId, 'accountId');
+    }
+    checkUnused(count(TxnFilter(accountIds: {accountId})), '帳戶');
+    _db.execute('DELETE FROM accounts WHERE id = ?', [accountId]);
+    _loadReferenceData();
+  }
+
+  @override
+  void addCategory(Category category) {
+    checkNewId(_categories.containsKey(category.id), category.id);
+    checkCategory(this, category);
+    _db.execute(_insertCategory, _categoryArgs(category, _nextSort('categories')));
+    _loadReferenceData();
+  }
+
+  @override
+  void renameCategory(String categoryId, String name) {
+    final c = _categories[categoryId];
+    if (c == null) throw ArgumentError.value(categoryId, 'categoryId');
+    checkCategory(this, c.renamed(name));
+    _db.execute('UPDATE categories SET name = ? WHERE id = ?', [name, categoryId]);
+    _loadReferenceData();
+  }
+
+  @override
+  void deleteCategory(String categoryId) {
+    if (!_categories.containsKey(categoryId)) {
+      throw ArgumentError.value(categoryId, 'categoryId');
+    }
+    checkUnused(count(TxnFilter(categoryIds: {categoryId})), '分類');
+    _atomic(() {
+      _db
+        ..execute('DELETE FROM categories WHERE parent_id = ?', [categoryId])
+        ..execute('DELETE FROM categories WHERE id = ?', [categoryId]);
+    });
+    _loadReferenceData();
+  }
+
+  @override
+  void reorderCategories(List<String> ids) {
+    final marks = List.filled(ids.length, '?').join(', ');
+    final slots = [
+      for (final r in _db.select(
+        'SELECT sort FROM categories WHERE id IN ($marks) ORDER BY sort',
+        ids,
+      ))
+        r['sort'] as int,
+    ];
+    if (slots.length != ids.length) throw ArgumentError.value(ids, 'ids');
+    _atomic(() {
+      for (final (i, id) in ids.indexed) {
+        _db.execute('UPDATE categories SET sort = ? WHERE id = ?', [slots[i], id]);
+      }
+    });
+    _loadReferenceData();
+  }
+
+  @override
+  void addProject(Project project) {
+    checkNewId(_projects.containsKey(project.id), project.id);
+    if (_projects.values.any((p) => p.name == project.name)) {
+      throw ArgumentError.value(project.name, 'name', '專案名稱重複');
+    }
+    _db.execute(
+      'INSERT INTO projects (id, name, sort) VALUES (?, ?, ?)',
+      [project.id, project.name, _nextSort('projects')],
+    );
+    _loadReferenceData();
+  }
+
+  bool _txnExists(String id) =>
+      _db.select('SELECT 1 FROM txns WHERE id = ?', [id]).isNotEmpty;
+
+  void _writeInvoice(Txn t) {
+    _db.execute('DELETE FROM invoices WHERE txn_id = ?', [t.id]);
+    _db.execute('DELETE FROM invoice_items WHERE txn_id = ?', [t.id]);
+    if (t.invoice == null) return;
+    _db.execute(_insertInvoice, _invoiceArgs(t));
+    for (final (i, item) in t.invoice!.items.indexed) {
+      _db.execute(_insertItem, _itemArgs(t.id, i, item));
+    }
+  }
+
+  @override
+  void addTxn(Txn txn) {
+    checkNewId(_txnExists(txn.id), txn.id);
+    checkTxn(this, txn);
+    _atomic(() {
+      _db.execute(_insertTxn, _txnArgs(txn));
+      _writeInvoice(txn);
+    });
+  }
+
+  @override
+  void updateTxn(Txn txn) {
+    if (!_txnExists(txn.id)) throw ArgumentError.value(txn.id, 'txn.id');
+    checkTxn(this, txn);
+    // UPDATE, not delete + insert: keeps seq, the tie-breaker for ordering.
+    final args = _txnArgs(txn);
+    _atomic(() {
+      _db.execute(
+        'UPDATE txns SET kind = ?, date = ?, account_id = ?, to_account_id = ?, '
+        'amount = ?, to_amount = ?, base_amount = ?, fx_rate_display = ?, '
+        'category_id = ?, project_id = ?, note = ?, place = ?, created_at = ?, '
+        'fee_of_txn_id = ?, needs_review = ?, legacy_rows = ? WHERE id = ?',
+        [...args.skip(1), txn.id],
+      );
+      _writeInvoice(txn);
+    });
+  }
+
+  @override
+  void deleteTxn(String txnId) {
+    if (!_txnExists(txnId)) throw ArgumentError.value(txnId, 'txnId');
+    _atomic(() {
+      _db
+        ..execute('UPDATE txns SET fee_of_txn_id = NULL WHERE fee_of_txn_id = ?', [txnId])
+        ..execute('DELETE FROM txns WHERE id = ?', [txnId]);
+    });
   }
 
   @override
@@ -449,3 +542,71 @@ String _two(int n) => n.toString().padLeft(2, '0');
 /// `YYYY-MM-DD`.
 String formatIsoDate(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${_two(d.month)}-${_two(d.day)}';
+
+const _insertAccount =
+    'INSERT INTO accounts (id, name, type, currency, sort, anchor_amount, '
+    'anchor_date, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+
+List<Object?> _accountArgs(Account a, int sort) => [
+  a.id,
+  a.name,
+  a.type.name,
+  a.currency,
+  sort,
+  a.anchor?.amount.toString(),
+  a.anchor == null ? null : formatIsoDate(a.anchor!.date),
+  a.archived ? 1 : 0,
+];
+
+const _insertCategory =
+    'INSERT INTO categories (id, kind, name, parent_id, sort) VALUES (?, ?, ?, ?, ?)';
+
+List<Object?> _categoryArgs(Category c, int sort) =>
+    [c.id, c.kind.name, c.name, c.parentId, sort];
+
+const _insertTxn =
+    'INSERT INTO txns (id, kind, date, account_id, to_account_id, amount, '
+    'to_amount, base_amount, fx_rate_display, category_id, project_id, note, '
+    'place, created_at, fee_of_txn_id, needs_review, legacy_rows) '
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+/// Values for [_insertTxn]; the id comes first.
+List<Object?> _txnArgs(Txn t) => [
+  t.id,
+  t.kind.name,
+  formatIsoDate(t.date),
+  t.accountId,
+  t.toAccountId,
+  t.amount.toString(),
+  t.toAmount?.toString(),
+  t.baseAmount.toString(),
+  t.fxRateDisplay,
+  t.categoryId,
+  t.projectId,
+  t.note,
+  t.place,
+  t.createdAt == null ? null : _isoDateTime(t.createdAt!),
+  t.feeOfTxnId,
+  t.needsReview ? 1 : 0,
+  t.legacyRows.isEmpty ? null : jsonEncode(t.legacyRows),
+];
+
+const _insertInvoice =
+    'INSERT INTO invoices (txn_id, number, seller_tax_id, seller_name, '
+    'seller_address, carrier) VALUES (?, ?, ?, ?, ?, ?)';
+
+List<Object?> _invoiceArgs(Txn t) => [
+  t.id,
+  t.invoice!.number,
+  t.invoice!.sellerTaxId,
+  t.invoice!.sellerName,
+  t.invoice!.sellerAddress,
+  t.invoice!.carrier,
+];
+
+const _insertItem =
+    'INSERT INTO invoice_items (txn_id, position, name, quantity, amount) '
+    'VALUES (?, ?, ?, ?, ?)';
+
+List<Object?> _itemArgs(String txnId, int position, InvoiceItem item) =>
+    [txnId, position, item.name, item.quantity.toString(), item.amount.toString()];

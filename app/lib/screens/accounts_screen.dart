@@ -4,16 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import 'account_fields.dart';
 import 'account_screen.dart';
-
-const accountTypeLabels = {
-  AccountType.cash: '現金',
-  AccountType.bank: '銀行',
-  AccountType.credit: '信用卡',
-  AccountType.epay: '電子支付',
-  AccountType.securities: '證券',
-  AccountType.other: '其他',
-};
+import 'new_account_screen.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key, required this.app});
@@ -29,17 +22,42 @@ class AccountsScreen extends StatelessWidget {
       final unknown = balances
           .where((b) => b.account.currency == unknownCurrency)
           .length;
+      final archived = balances.where((b) => b.account.archived).toList();
       return Scaffold(
         appBar: AppBar(title: const Text('帳戶')),
+        floatingActionButton: FloatingActionButton.extended(
+          heroTag: null, // several screens have one; skip the hero animation
+          key: const Key('addAccount'),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => NewAccountScreen(app: app)),
+          ),
+          icon: const Icon(Icons.add),
+          label: const Text('新增帳戶'),
+        ),
         body: balances.isEmpty
-            ? const Center(child: Text('匯入 CWMoney 的 CSV 後，帳戶會出現在這裡。'))
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    '還沒有帳戶。按「新增帳戶」建立，或到「紀錄」選擇從頭開始或匯入 CWMoney。',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
             : ListView(
                 children: [
                   _Summary(balances: balances),
                   if (unset > 0 || unknown > 0)
                     _UnsetNotice(unset: unset, unknownCurrency: unknown),
                   for (final type in AccountType.values)
-                    ..._section(context, type, balances),
+                    ..._section(
+                      context,
+                      accountTypeLabels[type]!,
+                      [for (final b in balances) if (!b.account.archived && b.account.type == type) b],
+                    ),
+                  ..._section(context, '已封存', archived),
+                  const SizedBox(height: 80), // room for the button
                 ],
               ),
       );
@@ -48,18 +66,14 @@ class AccountsScreen extends StatelessWidget {
 
   List<Widget> _section(
     BuildContext context,
-    AccountType type,
-    List<AccountBalance> all,
+    String title,
+    List<AccountBalance> items,
   ) {
-    final items = all.where((b) => b.account.type == type).toList();
     if (items.isEmpty) return const [];
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Text(
-          accountTypeLabels[type]!,
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
+        child: Text(title, style: Theme.of(context).textTheme.titleSmall),
       ),
       for (final b in items) _AccountTile(app: app, balance: b),
     ];
@@ -130,8 +144,8 @@ class _UnsetNotice extends StatelessWidget {
             child: Text(
               [
                 if (unset > 0)
-                  '有 $unset 個帳戶還沒設定餘額。CWMoney 的 CSV 沒有期初餘額，'
-                      '目前的數字只是紀錄的加總。點帳戶輸入今天的實際餘額（例如網銀顯示的金額），'
+                  '有 $unset 個帳戶還沒設定餘額，目前的數字只是紀錄的加總。'
+                      '點帳戶輸入實際餘額（例如錢包裡的現金、網銀顯示的金額），'
                       '就會自動算出期初餘額。',
                 if (unknownCurrency > 0)
                   '有 $unknownCurrency 個外幣帳戶無法從名稱判斷幣別，請點帳戶選擇幣別。',

@@ -50,11 +50,71 @@ class AppState extends ChangeNotifier {
     return _balances!;
   }
 
-  void updateAccount(String accountId, {AccountType? type, String? currency}) {
-    ledger.updateAccount(accountId, type: type, currency: currency);
+  /// Runs a ledger write; returns the user-facing error message instead
+  /// of throwing when the ledger rejects it.
+  String? write(void Function(LedgerStore ledger) change) {
+    try {
+      change(ledger);
+    } on ArgumentError catch (e) {
+      return '${e.message}';
+    } on StateError catch (e) {
+      return e.message;
+    }
+    revision++;
+    notifyListeners();
+    return null;
+  }
+
+  void updateAccount(
+    String accountId, {
+    String? name,
+    AccountType? type,
+    String? currency,
+    bool? archived,
+  }) {
+    ledger.updateAccount(
+      accountId,
+      name: name,
+      type: type,
+      currency: currency,
+      archived: archived,
+    );
     revision++;
     notifyListeners();
   }
+
+  /// No accounts and no records: offer to start fresh or import.
+  bool get isBlank => ledger.accounts.isEmpty && ledger.count() == 0;
+
+  /// Sets up an empty ledger with default categories and a cash account.
+  void startFresh() {
+    for (final c in defaultCategories()) {
+      ledger.addCategory(c);
+    }
+    ledger
+      ..addAccount(defaultCashAccount())
+      ..setMeta('ledger.startedAt', clock().toIso8601String());
+    revision++;
+    notifyListeners();
+  }
+
+  /// Accounts that can take new records.
+  List<Account> get activeAccounts =>
+      [for (final a in ledger.accounts) if (!a.archived) a];
+
+  String? get lastAccountId => ledger.meta('ui.lastAccount');
+  String? lastCategoryId(TxnKind kind) =>
+      ledger.meta('ui.lastCategory.${kind.name}');
+
+  /// Adds or replaces [txn] and remembers its account and category as the
+  /// defaults for the next record.
+  String? saveTxn(Txn txn, {required bool isNew}) => write((l) {
+    isNew ? l.addTxn(txn) : l.updateTxn(txn);
+    l.setMeta('ui.lastAccount', txn.accountId);
+    if (txn.categoryId != null) {
+      l.setMeta('ui.lastCategory.${txn.kind.name}', txn.categoryId);
+    }
+  });
 
   void setBalanceAnchor(String accountId, BalanceAnchor? anchor) {
     ledger.setBalanceAnchor(accountId, anchor);

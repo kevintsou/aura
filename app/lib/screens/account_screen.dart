@@ -4,33 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
-import 'accounts_screen.dart';
+import 'account_fields.dart';
+import 'dialogs.dart';
 
 enum _Mode { today, opening, onDate }
 
-const _otherCurrency = '__other';
-
-/// Currencies offered in the picker; any ISO code can be typed instead.
-const commonCurrencies = {
-  'TWD': '新台幣',
-  'USD': '美元',
-  'JPY': '日圓',
-  'EUR': '歐元',
-  'CNY': '人民幣',
-  'HKD': '港幣',
-  'GBP': '英鎊',
-  'AUD': '澳幣',
-  'CAD': '加幣',
-  'SGD': '新加坡幣',
-  'KRW': '韓元',
-  'THB': '泰銖',
-  'CHF': '瑞士法郎',
-  'NZD': '紐西蘭幣',
-};
-
-/// One account: correct its type and currency (the importer guesses them
-/// from the name) and set its real balance: today's, the opening one, or
-/// the one on a chosen day. Derived figures are previewed live.
+/// One account: rename it, correct its type and currency (the importer
+/// guesses them from the name), archive or delete it, and set its real
+/// balance: today's, the opening one, or the one on a chosen day.
+/// Derived figures are previewed live.
 class AccountScreen extends StatefulWidget {
   const AccountScreen({
     super.key,
@@ -47,9 +29,10 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   final _amount = TextEditingController();
-  final _customCurrency = TextEditingController();
+  final _name = TextEditingController();
   late AccountType _type;
-  late String _currencyChoice;
+  String? _currency;
+  String? _error;
   var _mode = _Mode.today;
   late DateTime _date;
   late final List<AccountFlow> _flows;
@@ -69,34 +52,26 @@ class _AccountScreenState extends State<AccountScreen> {
     _date = _saved.anchor?.date ?? _today;
     if (_saved.isSet) _amount.text = _saved.current.toString();
     _amount.addListener(() => setState(() {}));
-    _customCurrency.addListener(() => setState(() {}));
+    _name
+      ..text = _account.name
+      ..addListener(() => setState(() => _error = null));
     _type = _account.type;
-    _currencyChoice = _account.currency == unknownCurrency
-        ? unknownCurrency
-        : commonCurrencies.containsKey(_account.currency)
-        ? _account.currency
-        : _otherCurrency;
-    if (_currencyChoice == _otherCurrency) {
-      _customCurrency.text = _account.currency;
-    }
+    _currency = _account.currency == unknownCurrency ? null : _account.currency;
   }
 
   @override
   void dispose() {
     _amount.dispose();
-    _customCurrency.dispose();
+    _name.dispose();
     super.dispose();
   }
 
-  /// The chosen currency, or null while the typed code is invalid.
-  String? get _currency {
-    if (_currencyChoice != _otherCurrency) return _currencyChoice;
-    final code = _customCurrency.text.trim().toUpperCase();
-    return isCurrencyCode(code) ? code : null;
-  }
+  String get _newName => _name.text.trim();
 
   bool get _detailsChanged =>
-      _type != _account.type || _currency != _account.currency;
+      _newName != _account.name ||
+      _type != _account.type ||
+      _currency != _account.currency;
 
   /// Whether saving would change the account's balances.
   bool get _balanceChanged {
@@ -107,6 +82,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   bool get _canSave =>
       _currency != null &&
+      _newName.isNotEmpty &&
       (_amount.text.trim().isEmpty || _entered != null) &&
       (_detailsChanged || _balanceChanged);
 
@@ -148,11 +124,42 @@ class _AccountScreenState extends State<AccountScreen> {
 
   void _save() {
     if (!_canSave) return;
+    // Read before any write: writes recompute the saved balance.
+    final anchor = _balanceChanged ? _candidate : null;
     if (_detailsChanged) {
-      _app.updateAccount(widget.accountId, type: _type, currency: _currency);
+      final error = _app.write(
+        (l) => l.updateAccount(
+          widget.accountId,
+          name: _newName,
+          type: _type,
+          currency: _currency,
+        ),
+      );
+      if (error != null) {
+        setState(() => _error = error);
+        return;
+      }
     }
-    if (_balanceChanged) _app.setBalanceAnchor(widget.accountId, _candidate);
+    if (anchor != null) _app.setBalanceAnchor(widget.accountId, anchor);
     Navigator.pop(context);
+  }
+
+  void _toggleArchived() {
+    _app.updateAccount(widget.accountId, archived: !_account.archived);
+    Navigator.pop(context);
+  }
+
+  Future<void> _delete() async {
+    if (!await confirm(context, title: '刪除「${_account.name}」？', action: '刪除') ||
+        !mounted) {
+      return;
+    }
+    final error = _app.write((l) => l.deleteAccount(widget.accountId));
+    if (error != null) {
+      setState(() => _error = error);
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   void _clear() {
@@ -177,6 +184,23 @@ class _AccountScreenState extends State<AccountScreen> {
             onPressed: _canSave ? _save : null,
             child: const Text('儲存'),
           ),
+          PopupMenuButton<VoidCallback>(
+            key: const Key('accountMenu'),
+            onSelected: (action) => action(),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: _toggleArchived,
+                child: Text(a.archived ? '取消封存' : '封存帳戶'),
+              ),
+              PopupMenuItem(
+                value: _delete,
+                enabled: _saved.flowCount == 0,
+                child: Text(
+                  _saved.flowCount == 0 ? '刪除帳戶' : '刪除帳戶（有紀錄，請改用封存）',
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: ListView(
@@ -188,67 +212,39 @@ class _AccountScreenState extends State<AccountScreen> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          TextField(
+            key: const Key('accountName'),
+            controller: _name,
+            decoration: const InputDecoration(
+              labelText: '名稱',
+              helperText: '重新匯入 CWMoney 時，會用名稱對應帳戶',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: DropdownButtonFormField<AccountType>(
-                  key: const Key('accountType'),
-                  initialValue: _type,
-                  decoration: const InputDecoration(
-                    labelText: '類型',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    for (final t in AccountType.values)
-                      DropdownMenuItem(value: t, child: Text(accountTypeLabels[t]!)),
-                  ],
-                  onChanged: (t) => setState(() => _type = t!),
+                child: AccountTypeField(
+                  value: _type,
+                  onChanged: (t) => setState(() => _type = t),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  key: const Key('accountCurrency'),
-                  initialValue: _currencyChoice,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: '幣別',
-                    border: const OutlineInputBorder(),
-                    errorText: _currencyChoice == unknownCurrency ? '請選擇幣別' : null,
-                  ),
-                  items: [
-                    if (_currencyChoice == unknownCurrency)
-                      const DropdownMenuItem(
-                        value: unknownCurrency,
-                        child: Text('未知'),
-                      ),
-                    for (final e in commonCurrencies.entries)
-                      DropdownMenuItem(value: e.key, child: Text('${e.key} ${e.value}')),
-                    const DropdownMenuItem(value: _otherCurrency, child: Text('其他…')),
-                  ],
-                  onChanged: (c) => setState(() => _currencyChoice = c!),
+                child: CurrencyField(
+                  initial: a.currency,
+                  onChanged: (c) => setState(() => _currency = c),
                 ),
               ),
             ],
           ),
-          if (_currencyChoice == _otherCurrency) ...[
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('customCurrency'),
-              controller: _customCurrency,
-              textCapitalization: TextCapitalization.characters,
-              maxLength: 3,
-              decoration: InputDecoration(
-                labelText: '幣別代碼（ISO 4217）',
-                hintText: '例如 MYR',
-                errorText: _customCurrency.text.isNotEmpty && _currency == null
-                    ? '請輸入三個英文字母'
-                    : null,
-                border: const OutlineInputBorder(),
-              ),
+          if (a.archived)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('已封存：記帳時不會出現在帳戶選單。', style: theme.textTheme.bodySmall),
             ),
-          ],
           if (_currency != null && _currency != a.currency)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -256,6 +252,11 @@ class _AccountScreenState extends State<AccountScreen> {
                 '只會更改幣別標示，金額數字不會換算。',
                 style: theme.textTheme.bodySmall,
               ),
+            ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
             ),
           const SizedBox(height: 24),
           Text('餘額', style: theme.textTheme.titleSmall),

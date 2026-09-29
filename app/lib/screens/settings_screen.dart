@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import 'ai_settings_screen.dart';
+import 'categories_screen.dart';
 import 'import_action.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -29,6 +30,17 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => AiSettingsScreen(app: app)),
+            ),
+          ),
+          ListTile(
+            key: const Key('manageCategories'),
+            leading: const Icon(Icons.category_outlined),
+            title: const Text('分類管理'),
+            subtitle: const Text('新增、改名、刪除、調整順序'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => CategoriesScreen(app: app)),
             ),
           ),
           ListTile(

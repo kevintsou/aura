@@ -74,6 +74,11 @@ const migrations = <String>[
   ALTER TABLE accounts ADD COLUMN anchor_amount TEXT;  -- exact decimal
   ALTER TABLE accounts ADD COLUMN anchor_date TEXT;    -- YYYY-MM-DD
   ''',
+  // 3: archived accounts; unique account names (re-imports match by name).
+  '''
+  ALTER TABLE accounts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+  CREATE UNIQUE INDEX accounts_by_name ON accounts (name);
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

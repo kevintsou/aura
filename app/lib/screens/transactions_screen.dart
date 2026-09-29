@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import 'category_picker.dart';
 import 'import_action.dart';
+import 'txn_edit_screen.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key, required this.app});
@@ -54,10 +56,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     builder: (context, _) {
       _refreshIfChanged();
       final banner = _review > 0 ? 1 : 0;
+      final canRecord = widget.app.activeAccounts.isNotEmpty;
       return Scaffold(
         appBar: AppBar(
           title: Text(_count == 0 ? '紀錄' : '紀錄（$_count 筆）'),
         ),
+        floatingActionButton: canRecord
+            ? FloatingActionButton.extended(
+                heroTag: null, // several screens have one; skip the hero animation
+                key: const Key('addTxn'),
+                onPressed: () => openTxnEditor(context, widget.app),
+                icon: const Icon(Icons.add),
+                label: const Text('記一筆'),
+              )
+            : null,
         body: _count == 0
             ? _Empty(app: widget.app)
             : ListView.separated(
@@ -79,32 +91,56 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   );
 }
 
+Future<void> openTxnEditor(BuildContext context, AppState app, [Txn? txn]) =>
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TxnEditScreen(app: app, txn: txn)),
+    );
+
 class _Empty extends StatelessWidget {
   const _Empty({required this.app});
   final AppState app;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.receipt_long_outlined, size: 48),
-          const SizedBox(height: 16),
-          const Text('還沒有紀錄', style: TextStyle(fontSize: 20)),
-          const SizedBox(height: 8),
-          const Text('從 CWMoney 經典版匯出 CSV，就能把歷史紀錄搬過來。', textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: () => importCwmoneyFile(context, app),
-            icon: const Icon(Icons.file_open_outlined),
-            label: const Text('匯入 CWMoney CSV'),
-          ),
-        ],
+  Widget build(BuildContext context) {
+    final blank = app.isBlank;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.receipt_long_outlined, size: 48),
+            const SizedBox(height: 16),
+            Text(blank ? '開始記帳' : '還沒有紀錄', style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: 8),
+            Text(
+              blank
+                  ? '從頭開始會建立常用的分類和一個「現金」帳戶，之後都可以修改。'
+                        '用過 CWMoney 的話，也可以匯入它的 CSV 把歷史紀錄搬過來。'
+                  : '按「記一筆」新增第一筆紀錄。',
+              textAlign: TextAlign.center,
+            ),
+            if (blank) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                key: const Key('startFresh'),
+                onPressed: app.startFresh,
+                icon: const Icon(Icons.edit_note),
+                label: const Text('從頭開始記帳'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => importCwmoneyFile(context, app),
+                icon: const Icon(Icons.file_open_outlined),
+                label: const Text('匯入 CWMoney CSV'),
+              ),
+            ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _TxnTile extends StatelessWidget {
@@ -119,9 +155,7 @@ class _TxnTile extends StatelessWidget {
       final to = txn.toAccountId == null ? '？' : l.account(txn.toAccountId!)?.name;
       return '轉帳 $from → $to';
     }
-    final leaf = txn.categoryId == null ? null : l.category(txn.categoryId!);
-    final parent = leaf?.parentId == null ? null : l.category(leaf!.parentId!);
-    return [parent?.name, leaf?.name].whereType<String>().join(' · ');
+    return categoryLabel(l, txn.categoryId);
   }
 
   @override
@@ -140,6 +174,7 @@ class _TxnTile extends StatelessWidget {
       TxnKind.transfer => scheme.onSurfaceVariant,
     };
     return ListTile(
+      onTap: () => openTxnEditor(context, app, txn),
       leading: txn.needsReview ? const Icon(Icons.flag_outlined) : null,
       title: Text(_title()),
       subtitle: Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),

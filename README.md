@@ -2,14 +2,15 @@
 
 免費的手機記帳 App：
 
-- **相容 CWMoney**：直接匯入 CWMoney 經典版匯出的 CSV。匯入後輸入各帳戶今天的實際餘額，就會自動算出期初餘額。
+- **可以從頭開始記帳**：第一次打開選「從頭開始」，會建立常用分類和一個現金帳戶，然後就能記支出、收入、轉帳（含外幣）。
+- **相容 CWMoney**：也可以直接匯入 CWMoney 經典版匯出的 CSV。匯入後輸入各帳戶今天的實際餘額，就會自動算出期初餘額。
 - **AI 自己接**：用自己的 OpenAI API 金鑰，或任何 OpenAI 相容服務、本機模型、自己寫的 Agent，用自然語言分析自己的收支。
 
 沒有帳號、沒有廣告，也沒有 Aura 伺服器。資料存在手機的 SQLite 資料庫裡；AI 要查什麼，由手機在本機算好再交給你選的 AI。
 
-| AI 連線設定 | AI 助理（可以看到送出了什麼） | 紀錄 | 帳戶與期初餘額 |
-|---|---|---|---|
-| ![AI 連線設定](docs/images/ai-settings.png) | ![AI 助理](docs/images/assistant.png) | ![紀錄](docs/images/records.png) | ![帳戶](docs/images/accounts.png) |
+| 記一筆 | 紀錄 | 帳戶與期初餘額 | AI 連線設定 | AI 助理（可以看到送出了什麼） |
+|---|---|---|---|---|
+| ![記一筆](docs/images/new-record.png) | ![紀錄](docs/images/records.png) | ![帳戶](docs/images/accounts.png) | ![AI 連線設定](docs/images/ai-settings.png) | ![AI 助理](docs/images/assistant.png) |
 
 > 截圖用的是 `packages/aura_core/test/fixtures/` 裡的虛構資料，以及 `examples/mock_agent.py` 範例 Agent。
 

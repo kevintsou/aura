@@ -6,7 +6,7 @@ import '../app_state.dart';
 /// Picks a CWMoney export and imports it, then shows what happened.
 Future<void> importCwmoneyFile(BuildContext context, AppState app) async {
   final existing = app.ledger.count();
-  if (existing > 0 && !await _confirmReplace(context, existing)) return;
+  if (!app.isBlank && !await _confirmReplace(context, existing)) return;
   final file = await FilePicker.pickFile();
   if (file == null) return;
   final bytes = await file.readAsBytes();
@@ -41,7 +41,10 @@ Future<bool> _confirmReplace(BuildContext context, int count) async =>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('取代目前的紀錄？'),
-        content: Text('匯入會刪除目前的 $count 筆紀錄，改成檔案裡的內容。這個動作無法復原。'),
+        content: Text(
+          '匯入會刪除目前的帳戶、分類和 $count 筆紀錄，改成檔案裡的內容。'
+          '這個動作無法復原。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

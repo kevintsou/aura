@@ -31,6 +31,9 @@ class CwmImportResult {
 }
 
 const fuzzyWindow = Duration(seconds: 2);
+
+/// Name given to rows whose account field is blank (seen in real exports).
+const unnamedAccount = '未命名帳戶';
 const _noProject = '無特別專案';
 const _transferNote = '[帳戶轉帳]';
 const _feeNote = '[手續費][帳戶轉帳]';
@@ -106,7 +109,7 @@ class _Importer {
       isIncome: isIncome,
       amount: amount,
       subtotal: subtotal,
-      accountId: _account(row.account).id,
+      accountId: _account(row.account.trim().isEmpty ? unnamedAccount : row.account).id,
     );
   }
 

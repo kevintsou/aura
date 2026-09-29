@@ -199,4 +199,41 @@ void main() {
       expect(txns.last.date, DateTime(2026, 9, 22));
     });
   });
+
+  test('rows with a blank account go to a named placeholder account', () {
+    // Big5 trail bytes never equal '"' or ',', so fields split safely on
+    // the bytes of '","' without decoding.
+    const sep = [0x22, 0x2C, 0x22];
+    List<List<int>> split(List<int> row) {
+      final parts = <List<int>>[[]];
+      for (var i = 0; i < row.length; i++) {
+        if (i + 2 < row.length && row[i] == sep[0] && row[i + 1] == sep[1] && row[i + 2] == sep[2]) {
+          parts.add([]);
+          i += 2;
+        } else {
+          parts.last.add(row[i]);
+        }
+      }
+      return parts;
+    }
+
+    final lines = <List<int>>[[]];
+    for (var i = 0; i < bytes.length; i++) {
+      if (bytes[i] == 0x0D && i + 1 < bytes.length && bytes[i + 1] == 0x0A) {
+        lines.add([]);
+        i++;
+      } else {
+        lines.last.add(bytes[i]);
+      }
+    }
+    final row = split(lines[lines.length - 2])..[4] = [];
+    final csv = [
+      ...lines.first, 0x0D, 0x0A,
+      for (final (i, f) in row.indexed) ...[if (i > 0) ...sep, ...f],
+      0x0D, 0x0A,
+    ];
+    final ledger = importCwmoneyCsv(csv).ledger;
+    expect(ledger.accounts.single.name, unnamedAccount);
+    expect(ledger.count(), 1);
+  });
 }

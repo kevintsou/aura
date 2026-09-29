@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:decimal/decimal.dart';
 
 import 'balance.dart';
@@ -16,9 +18,12 @@ class Account {
     required this.type,
     required this.currency,
     this.anchor,
+    this.archived = false,
   });
 
   final String id;
+
+  /// Unique within a ledger; re-imports match accounts by name.
   final String name;
   final AccountType type;
 
@@ -29,21 +34,41 @@ class Account {
   /// derived. Null until the user sets one (CWMoney CSVs lack it).
   final BalanceAnchor? anchor;
 
+  /// Hidden from pickers for new records; its history stays.
+  final bool archived;
+
   Account withAnchor(BalanceAnchor? anchor) => Account(
     id: id,
     name: name,
     type: type,
     currency: currency,
     anchor: anchor,
+    archived: archived,
   );
 
-  Account copyWith({AccountType? type, String? currency}) => Account(
+  Account copyWith({
+    String? name,
+    AccountType? type,
+    String? currency,
+    bool? archived,
+  }) => Account(
     id: id,
-    name: name,
+    name: name ?? this.name,
     type: type ?? this.type,
     currency: currency ?? this.currency,
     anchor: anchor,
+    archived: archived ?? this.archived,
   );
+}
+
+final _random = Random.secure();
+
+/// A new unique id for records created in the app. Imported records use
+/// short sequential ids; these never collide with them.
+String newId(String prefix) {
+  final time = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+  final rand = List.generate(6, (_) => _random.nextInt(36).toRadixString(36)).join();
+  return '$prefix-$time$rand';
 }
 
 /// Placeholder currency for accounts whose currency is not known.
@@ -69,6 +94,9 @@ class Category {
   final TxnKind kind;
   final String name;
   final String? parentId;
+
+  Category renamed(String name) =>
+      Category(id: id, kind: kind, name: name, parentId: parentId);
 }
 
 class Project {
@@ -186,4 +214,25 @@ class Txn {
 
   /// Raw source rows, kept so the record can be exported unchanged.
   final List<List<String>> legacyRows;
+
+  /// This transaction with [feeOfTxnId] cleared (its transfer was deleted).
+  Txn withoutFeeLink() => Txn(
+    id: id,
+    kind: kind,
+    date: date,
+    amount: amount,
+    baseAmount: baseAmount,
+    accountId: accountId,
+    toAccountId: toAccountId,
+    toAmount: toAmount,
+    fxRateDisplay: fxRateDisplay,
+    categoryId: categoryId,
+    projectId: projectId,
+    note: note,
+    place: place,
+    invoice: invoice,
+    createdAt: createdAt,
+    needsReview: needsReview,
+    legacyRows: legacyRows,
+  );
 }
