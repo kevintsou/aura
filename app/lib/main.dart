@@ -62,6 +62,34 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   var _tab = 0;
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // Record what came due while the app was closed or in the background.
+    _lifecycle = AppLifecycleListener(onResume: _runRecurring);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runRecurring());
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  void _runRecurring() {
+    if (!mounted) return;
+    final run = widget.app.runRecurring();
+    final messages = [
+      if (run.recorded.isNotEmpty) '已自動記入 ${run.recorded.length} 筆週期收支',
+      if (run.problems.isNotEmpty) '有 ${run.problems.length} 個週期收支無法記帳，請到「設定 → 週期收支」檢查',
+    ];
+    if (messages.isEmpty) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(messages.join('\n'))));
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(

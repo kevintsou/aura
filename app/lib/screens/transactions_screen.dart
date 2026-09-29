@@ -176,7 +176,11 @@ class _TxnTile extends StatelessWidget {
     };
     return ListTile(
       onTap: () => openTxnEditor(context, app, txn),
-      leading: txn.needsReview ? const Icon(Icons.flag_outlined) : null,
+      leading: txn.needsReview
+          ? const Icon(Icons.flag_outlined)
+          : txn.recurringId != null
+          ? Icon(Icons.event_repeat, semanticLabel: '週期收支', color: scheme.onSurfaceVariant)
+          : null,
       title: Text(_title()),
       subtitle: Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Text(

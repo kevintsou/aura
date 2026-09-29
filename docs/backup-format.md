@@ -32,9 +32,11 @@
     "categories":   [{"id", "kind", "name", "parentId"?}],            // 依顯示順序
     "projects":     [{"id", "name"}],
     "budgets"?:     [{"id", "categoryId"?, "amount"}],               // 每月金額；沒有 categoryId 是總預算
+    "recurring"?:   [{"id", "template": {紀錄的欄位，date 是第一次}, "unit", "every",
+                      "until"?, "times"?, "next"?}],                  // 沒有 next 表示已結束
     "transactions": [{"id", "kind", "date", "amount", "baseAmount", "accountId"?, "toAccountId"?,
                       "toAmount"?, "fxRate"?, "categoryId"?, "projectId"?, "note"?, "place"?,
-                      "createdAt"?, "feeOf"?, "needsReview"?, "legacyRows"?,
+                      "createdAt"?, "feeOf"?, "recurringId"?, "needsReview"?, "legacyRows"?,
                       "invoice"?: {"number", "sellerTaxId"?, "sellerName"?, "sellerAddress"?,
                                    "carrier"?, "items": [[name, quantity, amount]]}}],
     "meta": {"import.fileName": "…"}   // 不含 backup.* 這類只屬於這支手機的設定
@@ -43,7 +45,7 @@
 ```
 
 - 金額一律是**十進位字串**，不會有浮點誤差。
-- `budgets` 是後來加的欄位：舊的備份檔沒有它，還原時就是沒有預算；舊版 App 讀到新檔案會略過它。
+- `budgets`、`recurring`、`recurringId` 是後來加的欄位：舊的備份檔沒有它們，還原時就是沒有預算和週期收支；舊版 App 讀到新檔案會略過它們。
 - 日期是 `YYYY-MM-DD`。
 
 **加密（設了密碼時）：** 把 `data` 換成：

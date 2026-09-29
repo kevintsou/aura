@@ -258,6 +258,8 @@ String _balanceNote(AppState app) {
     if (app.anchorsDropped.isNotEmpty)
       '${app.anchorsDropped.join('、')} 的餘額設定早於這個檔案的第一筆紀錄，'
           '已經清除，請重新設定。',
+    if (app.recurringDropped.isNotEmpty)
+      '週期收支「${app.recurringDropped.join('、')}」用到的帳戶或分類不在檔案裡，已經移除。',
     if (app.budgetsDropped.isNotEmpty)
       '檔案裡沒有「${app.budgetsDropped.join('、')}」分類，這些預算已經移除。',
     if (app.balances.values.any((b) => !b.isSet))

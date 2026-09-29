@@ -8,13 +8,21 @@ import 'category_picker.dart';
 import 'dialogs.dart';
 
 /// Records a new expense, income or transfer, or edits an existing one.
+/// Also adds and edits recurring items: a new record with a repeat rule
+/// becomes one.
 class TxnEditScreen extends StatefulWidget {
-  const TxnEditScreen({super.key, required this.app, this.txn});
+  const TxnEditScreen({super.key, required this.app, this.txn, this.recurring, this.repeat = false});
 
   final AppState app;
 
   /// Null for a new record.
   final Txn? txn;
+
+  /// The recurring item to edit.
+  final Recurring? recurring;
+
+  /// Start a new record as a monthly recurring item.
+  final bool repeat;
 
   @override
   State<TxnEditScreen> createState() => _TxnEditScreenState();
@@ -32,16 +40,43 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   String? _projectId;
   late DateTime _date;
   String? _error;
+  RepeatUnit? _unit;
+  final _every = TextEditingController(text: '1');
+  final _times = TextEditingController(text: '12');
+  var _end = _End.never;
+  DateTime? _until;
 
   AppState get _app => widget.app;
   LedgerStore get _ledger => _app.ledger;
   Txn? get _old => widget.txn;
-  bool get _isNew => _old == null;
+
+  /// What the form starts from: the record, or the recurring template.
+  Txn? get _source => widget.txn ?? widget.recurring?.template;
+  bool get _isNew => _source == null;
+  bool get _editingRecurring => widget.recurring != null;
+
+  /// A repeat rule can be set on new records and recurring items, not on
+  /// a record that already exists.
+  bool get _canRepeat => widget.txn == null;
 
   @override
   void initState() {
     super.initState();
-    final t = _old;
+    final t = _source;
+    if (widget.recurring case final r?) {
+      _unit = r.unit;
+      _every.text = '${r.every}';
+      if (r.until != null) {
+        _end = _End.until;
+        _until = r.until;
+      }
+      if (r.times != null) {
+        _end = _End.times;
+        _times.text = '${r.times}';
+      }
+    } else if (widget.repeat) {
+      _unit = RepeatUnit.month;
+    }
     if (t == null) {
       _kind = TxnKind.expense;
       final active = _app.activeAccounts;
@@ -63,14 +98,14 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
       _note.text = t.note ?? '';
     }
     if (_rate.text.isEmpty) _rate.text = _lastRate(_accountId) ?? '';
-    for (final c in [_amount, _toAmount, _rate, _note]) {
+    for (final c in [_amount, _toAmount, _rate, _note, _every, _times]) {
       c.addListener(() => setState(() => _error = null));
     }
   }
 
   @override
   void dispose() {
-    for (final c in [_amount, _toAmount, _rate, _note]) {
+    for (final c in [_amount, _toAmount, _rate, _note, _every, _times]) {
       c.dispose();
     }
     super.dispose();
@@ -163,7 +198,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     if (_needsRate && (rate == null || rate <= Decimal.zero)) {
       return (null, '請輸入 $_fromCurrency 對新台幣的匯率');
     }
-    final old = _old;
+    final old = _source;
     final Decimal base;
     if (old != null &&
         amount == old.amount &&
@@ -181,7 +216,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     final note = _note.text.trim();
     return (
       Txn(
-        id: old?.id ?? newId('t'),
+        id: _old?.id ?? newId('t'),
         kind: _kind,
         date: _date,
         accountId: _accountId,
@@ -193,27 +228,95 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
         categoryId: _isTransfer ? null : _categoryId,
         projectId: _projectId,
         note: note.isEmpty ? null : note,
-        place: old?.place,
-        invoice: old?.invoice,
-        createdAt: old?.createdAt ?? _app.clock(),
-        feeOfTxnId: old?.feeOfTxnId,
-        legacyRows: old?.legacyRows ?? const [],
+        place: _old?.place,
+        invoice: _old?.invoice,
+        createdAt: _old?.createdAt ?? _app.clock(),
+        feeOfTxnId: _old?.feeOfTxnId,
+        recurringId: _old?.recurringId,
+        legacyRows: _old?.legacyRows ?? const [],
       ),
       null,
     );
   }
 
+  /// The recurring item [txn] repeats, or an error message. Null [txn]
+  /// gives a preview while the form is incomplete.
+  (Recurring?, String?) _buildRecurring(Txn txn) {
+    final every = int.tryParse(_every.text.trim());
+    if (every == null || every < 1) return (null, '間隔至少是 1');
+    final times = _end == _End.times ? int.tryParse(_times.text.trim()) : null;
+    if (_end == _End.times && (times == null || times < 1)) return (null, '次數至少是 1');
+    if (_end == _End.until && _until == null) return (null, '請選擇結束日期');
+    final id = widget.recurring?.id ?? newId('r');
+    final draft = Recurring(
+      id: id,
+      template: txn.copyWith(id: id, recurringId: null),
+      unit: _unit!,
+      every: every,
+      until: _end == _End.until ? _until : null,
+      times: times,
+    );
+    // Carry on from where the item was, unless nothing was recorded yet.
+    final old = widget.recurring;
+    final DateTime resume;
+    if (old == null || old.next == old.start) {
+      resume = draft.start;
+    } else {
+      resume = old.next ?? dateOnly(_app.clock()).add(const Duration(days: 1));
+    }
+    return (draft.withNext(draft.firstFrom(resume)), null);
+  }
+
   void _save() {
     final (txn, problem) = _build();
-    final error = problem ?? _app.saveTxn(txn!, isNew: _isNew);
+    if (problem != null || _unit == null) {
+      final error = problem ?? _app.saveTxn(txn!, isNew: _isNew);
+      if (error != null) {
+        setState(() => _error = error);
+        return;
+      }
+      Navigator.pop(context, true);
+      return;
+    }
+    final (recurring, invalid) = _buildRecurring(txn!);
+    if (invalid != null) {
+      setState(() => _error = invalid);
+      return;
+    }
+    final (error, recorded) = _app.saveRecurring(recurring!);
     if (error != null) {
       setState(() => _error = error);
       return;
     }
+    final next = _ledger.recurrings.where((r) => r.id == recurring.id).firstOrNull?.next;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          [
+            if (recorded > 0) '已記入 $recorded 筆',
+            next == null ? '週期收支已結束' : '下次 ${formatDate(next)}',
+          ].join('，'),
+        ),
+      ),
+    );
     Navigator.pop(context, true);
   }
 
   Future<void> _delete() async {
+    if (_editingRecurring) {
+      if (!await confirm(
+            context,
+            title: '刪除這個週期收支？',
+            message: '之後不會再自動記帳。已經記下的紀錄會保留。',
+            action: '刪除',
+          ) ||
+          !mounted) {
+        return;
+      }
+      _app.deleteRecurring(widget.recurring!.id);
+      Navigator.pop(context, true);
+      return;
+    }
     if (!await confirm(context, title: '刪除這筆紀錄？', action: '刪除') || !mounted) {
       return;
     }
@@ -258,7 +361,15 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     final amountPrefix = _fromCurrency == baseCurrency ? 'NT\$ ' : '$_fromCurrency ';
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isNew ? '記一筆' : '編輯紀錄'),
+        title: Text(
+          _editingRecurring
+              ? '編輯週期收支'
+              : _unit != null
+              ? '新增週期收支'
+              : _isNew
+              ? '記一筆'
+              : '編輯紀錄',
+        ),
         actions: [
           if (!_isNew)
             IconButton(
@@ -366,10 +477,25 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.event),
-            title: const Text('日期'),
+            title: Text(_unit == null ? '日期' : '開始日期'),
             trailing: Text(formatDate(_date)),
             onTap: _chooseDate,
           ),
+          if (_canRepeat) ..._repeatFields(theme),
+          if (_recurringOfOld() case final r?)
+            ListTile(
+              key: const Key('openRecurring'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.repeat),
+              title: const Text('由週期收支自動記入'),
+              subtitle: Text('${describeRepeat(r)}。在這裡修改只會改這一筆。'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => TxnEditScreen(app: _app, recurring: r)),
+              ),
+            ),
+          const SizedBox(height: 16),
           DropdownButtonFormField<String?>(
             // Rebuilt when a project is added, so it shows the new one.
             key: ValueKey('txnProject-$_projectId-${_ledger.projects.length}'),
@@ -418,12 +544,139 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     );
   }
 
+  Recurring? _recurringOfOld() {
+    final id = _old?.recurringId;
+    return id == null ? null : _ledger.recurrings.where((r) => r.id == id).firstOrNull;
+  }
+
+  static const _unitNames = {
+    RepeatUnit.day: '天',
+    RepeatUnit.week: '週',
+    RepeatUnit.month: '個月',
+    RepeatUnit.year: '年',
+  };
+
+  List<Widget> _repeatFields(ThemeData theme) {
+    final unit = _unit;
+    return [
+      DropdownButtonFormField<RepeatUnit?>(
+        key: const Key('txnRepeat'),
+        initialValue: unit,
+        decoration: const InputDecoration(labelText: '重複', border: OutlineInputBorder()),
+        items: [
+          if (!_editingRecurring) const DropdownMenuItem(value: null, child: Text('不重複')),
+          const DropdownMenuItem(value: RepeatUnit.day, child: Text('每天')),
+          const DropdownMenuItem(value: RepeatUnit.week, child: Text('每週')),
+          const DropdownMenuItem(value: RepeatUnit.month, child: Text('每月')),
+          const DropdownMenuItem(value: RepeatUnit.year, child: Text('每年')),
+        ],
+        onChanged: (v) => setState(() => _unit = v),
+      ),
+      if (unit != null) ...[
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('repeatEvery'),
+                controller: _every,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: '每幾${_unitNames[unit]}',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<_End>(
+                key: const Key('repeatEnd'),
+                initialValue: _end,
+                decoration: const InputDecoration(labelText: '結束', border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: _End.never, child: Text('不結束')),
+                  DropdownMenuItem(value: _End.until, child: Text('到某天')),
+                  DropdownMenuItem(value: _End.times, child: Text('共幾次')),
+                ],
+                onChanged: (v) => setState(() => _end = v!),
+              ),
+            ),
+          ],
+        ),
+        if (_end == _End.until)
+          ListTile(
+            key: const Key('repeatUntil'),
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_busy),
+            title: const Text('結束日期'),
+            trailing: Text(_until == null ? '請選擇' : formatDate(_until!)),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _until ?? DateTime(_date.year + 1, _date.month, _date.day),
+                firstDate: _date,
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) setState(() => _until = picked);
+            },
+          ),
+        if (_end == _End.times) ...[
+          const SizedBox(height: 16),
+          TextField(
+            key: const Key('repeatTimes'),
+            controller: _times,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: '共幾次',
+              helperText: '例如信用卡分期 12 期',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(_repeatPreview() ?? '', key: const Key('repeatPreview'), style: theme.textTheme.bodySmall),
+      ],
+    ];
+  }
+
+  /// The rule in words and what saving will record now.
+  String? _repeatPreview() {
+    final (txn, _) = _build();
+    final probe =
+        txn ??
+        Txn(
+          id: 'preview',
+          kind: TxnKind.expense,
+          date: _date,
+          accountId: 'preview',
+          amount: Decimal.one,
+          baseAmount: Decimal.one,
+        );
+    final (r, problem) = _buildRecurring(probe);
+    if (r == null) return problem;
+    final today = dateOnly(_app.clock());
+    final due = r.next == null ? 0 : r.occurrencesFrom(r.next!).takeWhile((d) => !d.isAfter(today)).length;
+    return [
+      describeRepeat(r),
+      if (r.unit == RepeatUnit.month && r.start.day > 28) '沒有 ${r.start.day} 日的月份記在月底',
+      if (due > 0)
+        '儲存後會記入到今天為止的 $due 筆'
+      else if (r.next != null)
+        '下次 ${formatDate(r.next!)} 自動記入'
+      else
+        '已經沒有下一次',
+    ].join('。');
+  }
+
   String? _ratePreview() {
     final amount = _parse(_amount), rate = _parse(_rate);
     if (amount == null || rate == null) return null;
     return '約 ${formatMoney((amount * rate).round(scale: 2))}';
   }
 }
+
+enum _End { never, until, times }
 
 class _InvoiceCard extends StatelessWidget {
   const _InvoiceCard({required this.invoice});

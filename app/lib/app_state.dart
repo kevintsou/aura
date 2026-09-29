@@ -101,6 +101,10 @@ class AppState extends ChangeNotifier {
   /// Budgets whose category the last replacing import did not have.
   List<String> budgetsDropped = const [];
 
+  /// Recurring items the last replacing import had to drop because an
+  /// account or category they use is not in the file.
+  List<String> recurringDropped = const [];
+
   Map<String, AccountBalance>? _balances;
   int _balancesRevision = -1;
 
@@ -238,6 +242,7 @@ class AppState extends ChangeNotifier {
     _carryOverAccountDetails(result.ledger);
     final (kept, dropped) = _carryOverAnchors(result.ledger);
     final droppedBudgets = _carryOverBudgets(result.ledger);
+    final droppedRecurring = _carryOverRecurring(result.ledger);
     await takeSnapshot(SnapshotReason.beforeImport);
     try {
       ledger.replaceAll(result.ledger);
@@ -246,6 +251,7 @@ class AppState extends ChangeNotifier {
     }
     _importDone(fileName, result.report, kept, dropped);
     budgetsDropped = droppedBudgets;
+    recurringDropped = droppedRecurring;
     return null;
   }
 
@@ -255,6 +261,7 @@ class AppState extends ChangeNotifier {
       ..setMeta(_metaImportedAt, clock().toIso8601String());
     lastImport = report;
     budgetsDropped = const [];
+    recurringDropped = const [];
     anchorsKept = kept;
     anchorsDropped = dropped;
     revision++;
@@ -367,6 +374,82 @@ class AppState extends ChangeNotifier {
     return dropped;
   }
 
+  /// Moves recurring items over to a freshly imported ledger, matching
+  /// accounts, categories and projects by name. Returns the names of
+  /// items that had to be dropped.
+  List<String> _carryOverRecurring(InMemoryLedger imported) {
+    String path(LedgerReader l, Category c) =>
+        '${c.kind.name}/${c.parentId == null ? '' : l.category(c.parentId!)?.name}/${c.name}';
+    final accounts = {for (final a in imported.accounts) a.name: a.id};
+    final categories = {for (final c in imported.categories) path(imported, c): c.id};
+    final projects = {for (final p in imported.projects) p.name: p.id};
+    final dropped = <String>[];
+    for (final r in ledger.recurrings) {
+      final t = r.template;
+      String? account(String? id) => id == null ? null : accounts[ledger.account(id)?.name];
+      final category = t.categoryId == null ? null : ledger.category(t.categoryId!);
+      final project = t.projectId == null ? null : ledger.project(t.projectId!);
+      final from = account(t.accountId), to = account(t.toAccountId);
+      final categoryId = category == null ? null : categories[path(ledger, category)];
+      if (from == null || (t.toAccountId != null && to == null) || (category != null && categoryId == null)) {
+        dropped.add(recurringLabel(ledger, r));
+        continue;
+      }
+      final moved = Txn(
+        id: t.id,
+        kind: t.kind,
+        date: t.date,
+        accountId: from,
+        toAccountId: to,
+        amount: t.amount,
+        toAmount: t.toAmount,
+        baseAmount: t.baseAmount,
+        fxRateDisplay: t.fxRateDisplay,
+        categoryId: categoryId,
+        // A project is optional: drop just the project if it is gone.
+        projectId: project == null ? null : projects[project.name],
+        note: t.note,
+      );
+      try {
+        imported.setRecurring(
+          Recurring(
+            id: r.id,
+            template: moved,
+            unit: r.unit,
+            every: r.every,
+            until: r.until,
+            times: r.times,
+            next: r.next,
+          ),
+        );
+      } on ArgumentError {
+        dropped.add(recurringLabel(ledger, r));
+      }
+    }
+    return dropped;
+  }
+
+  /// Records recurring items that are due. Call on start and whenever
+  /// the app comes back to the foreground.
+  RecurringRun runRecurring() {
+    final run = recordDueRecurring(ledger, today: clock());
+    if (run.recorded.isNotEmpty || run.problems.isNotEmpty) {
+      revision++;
+      notifyListeners();
+    }
+    return run;
+  }
+
+  /// Adds or changes a recurring item and records what is already due.
+  /// Returns the error, or how many records were made.
+  (String?, int) saveRecurring(Recurring recurring) {
+    final error = write((l) => l.setRecurring(recurring));
+    if (error != null) return (error, 0);
+    return (null, runRecurring().recorded.length);
+  }
+
+  void deleteRecurring(String recurringId) => write((l) => l.deleteRecurring(recurringId));
+
   /// Adds or changes a budget; returns the user-facing error, if any.
   String? setBudget(Budget budget) => write((l) => l.setBudget(budget));
 
@@ -437,6 +520,15 @@ class AppState extends ChangeNotifier {
       ),
     );
   }
+}
+
+/// "房租・NT$15,000" style name for a recurring item.
+String recurringLabel(LedgerReader l, Recurring r) {
+  final t = r.template;
+  final what = t.kind == TxnKind.transfer
+      ? '轉帳 ${l.account(t.accountId!)?.name ?? '？'} → ${l.account(t.toAccountId!)?.name ?? '？'}'
+      : t.note ?? (t.categoryId == null ? '未分類' : l.category(t.categoryId!)?.name ?? '未分類');
+  return what;
 }
 
 sealed class ChatItem {

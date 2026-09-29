@@ -7,6 +7,7 @@ import 'backup_screen.dart';
 import 'budgets_screen.dart';
 import 'categories_screen.dart';
 import 'import_action.dart';
+import 'recurring_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.app});
@@ -51,6 +52,19 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => BackupScreen(app: app)),
+            ),
+          ),
+          ListTile(
+            key: const Key('manageRecurring'),
+            leading: const Icon(Icons.event_repeat),
+            title: const Text('週期收支'),
+            subtitle: Text(
+              app.ledger.recurrings.isEmpty ? '房租、薪水、訂閱、分期，到期自動記帳' : '${app.ledger.recurrings.length} 個週期收支',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => RecurringScreen(app: app)),
             ),
           ),
           ListTile(
