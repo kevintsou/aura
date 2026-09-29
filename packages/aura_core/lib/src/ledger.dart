@@ -69,6 +69,10 @@ abstract interface class LedgerStore implements LedgerReader {
   /// Sets or clears an account's known balance.
   void setBalanceAnchor(String accountId, BalanceAnchor? anchor);
 
+  /// Corrects what the importer guessed about an account. Amounts are
+  /// not converted: they were always in the account's real currency.
+  void updateAccount(String accountId, {AccountType? type, String? currency});
+
   /// Small key/value settings kept with the data (e.g. last import).
   String? meta(String key);
   void setMeta(String key, String? value);
@@ -126,6 +130,16 @@ class InMemoryLedger implements LedgerStore {
     final account = _accounts[accountId];
     if (account == null) throw ArgumentError.value(accountId, 'accountId');
     _accounts[accountId] = account.withAnchor(anchor);
+  }
+
+  @override
+  void updateAccount(String accountId, {AccountType? type, String? currency}) {
+    final account = _accounts[accountId];
+    if (account == null) throw ArgumentError.value(accountId, 'accountId');
+    if (currency != null && !isCurrencyCode(currency)) {
+      throw ArgumentError.value(currency, 'currency');
+    }
+    _accounts[accountId] = account.copyWith(type: type, currency: currency);
   }
 
   @override

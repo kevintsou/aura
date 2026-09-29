@@ -13,7 +13,11 @@ String formatMoney(Decimal amount, {String currency = baseCurrency}) {
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (_) => ',',
   );
-  final symbol = currency == baseCurrency ? 'NT\$' : '$currency ';
+  final symbol = switch (currency) {
+    baseCurrency => 'NT\$',
+    unknownCurrency => '未知幣別 ',
+    _ => '$currency ',
+  };
   return '${negative ? '-' : ''}$symbol$grouped$fraction';
 }
 

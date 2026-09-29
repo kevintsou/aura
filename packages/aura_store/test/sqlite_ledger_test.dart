@@ -174,6 +174,22 @@ void main() {
     test('rejects an unknown account', () {
       expect(() => db.setBalanceAnchor('nope', null), throwsArgumentError);
     });
+
+    test('account corrections persist and match the in-memory ledger', () {
+      final id = savings(db);
+      db.updateAccount(id, type: AccountType.securities, currency: 'USD');
+      _imported.updateAccount(id, type: AccountType.securities, currency: 'USD');
+      addTearDown(() => _imported.updateAccount(id, type: AccountType.bank, currency: 'TWD'));
+      expect(db.account(id)!.type, AccountType.securities);
+      expect(db.account(id)!.currency, 'USD');
+      final copy = SqliteLedger.inMemory()..replaceAll(db);
+      addTearDown(copy.close);
+      expect(copy.account(id)!.currency, 'USD');
+      db.updateAccount(id, type: AccountType.cash);
+      expect(db.account(id)!.currency, 'USD', reason: 'untouched');
+      expect(() => db.updateAccount('nope'), throwsArgumentError);
+      expect(() => db.updateAccount(id, currency: 'usd'), throwsArgumentError);
+    });
   });
 
   test('stores meta values', () {

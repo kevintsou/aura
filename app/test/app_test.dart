@@ -218,7 +218,7 @@ void main() {
       expect(find.text('NT\$225,645'), findsOneWidget); // opening preview
       expect(find.text('NT\$200,000'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('saveBalance')));
+      await tester.tap(find.byKey(const Key('saveAccount')));
       await tester.pumpAndSettle();
       expect(find.text('期初 NT\$225,645'), findsOneWidget);
       expect(find.textContaining('有 6 個帳戶還沒設定餘額'), findsOneWidget);
@@ -241,7 +241,7 @@ void main() {
         tester.widget<Text>(find.descendant(of: find.byKey(const Key('previewCurrent')), matching: find.byType(Text)).last).data,
         '-NT\$24,645',
       );
-      await tester.tap(find.byKey(const Key('saveBalance')));
+      await tester.tap(find.byKey(const Key('saveAccount')));
       await tester.pumpAndSettle();
       final savings = app.ledger.accounts.firstWhere((a) => a.name == '活存-測試');
       expect(savings.anchor!.date, DateTime(2026, 9, 20)); // day before first record
@@ -264,5 +264,98 @@ void main() {
     expect(app.ledger.account(id('活存-測試'))!.anchor, today);
     expect(app.ledger.account(id('現金'))!.anchor, isNull);
     expect(app.balances[id('活存-測試')]!.current, Decimal.fromInt(200000));
+  });
+
+  group('account type and currency', () {
+    Future<AppState> openAccount(WidgetTester tester, String name) async {
+      _tallScreen(tester);
+      final app = await _app();
+      await tester.runAsync(() => app.importCwmoney(_sample, 'sample.csv'));
+      await tester.pumpWidget(AuraApp(app: app));
+      await tester.tap(find.text('帳戶'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, name));
+      await tester.pumpAndSettle();
+      return app;
+    }
+
+    Future<void> choose(WidgetTester tester, Key field, String option) async {
+      await tester.tap(find.byKey(field));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(option).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('changing the type regroups the account', (tester) async {
+      final app = await openAccount(tester, '股票-測試');
+      await choose(tester, const Key('accountType'), '銀行');
+      await tester.tap(find.byKey(const Key('saveAccount')));
+      await tester.pumpAndSettle();
+      final account = app.ledger.accounts.firstWhere((a) => a.name == '股票-測試');
+      expect(account.type, AccountType.bank);
+      expect(account.anchor, isNull, reason: 'balance untouched');
+      expect(find.text('證券'), findsNothing, reason: 'no securities left');
+    });
+
+    testWidgets('changing the currency moves it out of the TWD total', (tester) async {
+      final app = await openAccount(tester, '定存-測試');
+      await choose(tester, const Key('accountCurrency'), 'USD 美元');
+      expect(find.text('只會更改幣別標示，金額數字不會換算。'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('saveAccount')));
+      await tester.pumpAndSettle();
+      expect(app.ledger.accounts.firstWhere((a) => a.name == '定存-測試').currency, 'USD');
+      // 73,495.5 − 100,000 moves out of TWD; USD −1,000 + 100,000.
+      expect(find.text('-NT\$26,504.5'), findsOneWidget);
+      expect(find.text('外幣：USD 99,000、-JPY 10,000'), findsOneWidget);
+    });
+
+    testWidgets('any ISO code can be typed; invalid ones cannot be saved', (tester) async {
+      final app = await openAccount(tester, '現金');
+      await choose(tester, const Key('accountCurrency'), '其他…');
+      await tester.enterText(find.byKey(const Key('customCurrency')), 'my');
+      await tester.pump();
+      expect(find.text('請輸入三個英文字母'), findsOneWidget);
+      final save = find.byKey(const Key('saveAccount'));
+      expect(tester.widget<TextButton>(save).onPressed, isNull);
+      await tester.enterText(find.byKey(const Key('customCurrency')), 'myr');
+      await tester.pump();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(app.ledger.accounts.firstWhere((a) => a.name == '現金').currency, 'MYR');
+    });
+
+    testWidgets('an unknown currency is flagged and must be chosen', (tester) async {
+      _tallScreen(tester);
+      final app = await _app();
+      app.ledger.replaceAll(
+        InMemoryLedger(
+          accounts: const [
+            Account(id: 'a', name: '外幣帳戶', type: AccountType.bank, currency: unknownCurrency),
+          ],
+        ),
+      );
+      await tester.pumpWidget(AuraApp(app: app));
+      await tester.tap(find.text('帳戶'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('1 個外幣帳戶無法從名稱判斷幣別'), findsOneWidget);
+      expect(find.textContaining('幣別未知'), findsOneWidget);
+      await tester.tap(find.text('外幣帳戶'));
+      await tester.pumpAndSettle();
+      expect(find.text('請選擇幣別'), findsOneWidget);
+      expect(tester.widget<TextButton>(find.byKey(const Key('saveAccount'))).onPressed, isNull);
+    });
+  });
+
+  test('re-importing keeps corrected types and currencies', () async {
+    final app = await _app(ledger: SqliteLedger.inMemory());
+    addTearDown(app.ledger.close);
+    await app.importCwmoney(_sample, 'sample.csv');
+    String id(String name) => app.ledger.accounts.firstWhere((a) => a.name == name).id;
+    app.updateAccount(id('股票-測試'), type: AccountType.bank, currency: 'USD');
+    await app.importCwmoney(_sample, 'sample.csv');
+    final stock = app.ledger.account(id('股票-測試'))!;
+    expect(stock.type, AccountType.bank);
+    expect(stock.currency, 'USD');
+    expect(app.ledger.account(id('現金'))!.type, AccountType.cash, reason: 'others as guessed');
   });
 }

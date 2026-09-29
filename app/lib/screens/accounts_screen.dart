@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
-import 'account_balance_screen.dart';
+import 'account_screen.dart';
 
 const accountTypeLabels = {
   AccountType.cash: '現金',
@@ -26,6 +26,9 @@ class AccountsScreen extends StatelessWidget {
     builder: (context, _) {
       final balances = app.balances.values.toList();
       final unset = balances.where((b) => !b.isSet).length;
+      final unknown = balances
+          .where((b) => b.account.currency == unknownCurrency)
+          .length;
       return Scaffold(
         appBar: AppBar(title: const Text('帳戶')),
         body: balances.isEmpty
@@ -33,7 +36,8 @@ class AccountsScreen extends StatelessWidget {
             : ListView(
                 children: [
                   _Summary(balances: balances),
-                  if (unset > 0) _UnsetNotice(count: unset),
+                  if (unset > 0 || unknown > 0)
+                    _UnsetNotice(unset: unset, unknownCurrency: unknown),
                   for (final type in AccountType.values)
                     ..._section(context, type, balances),
                 ],
@@ -108,8 +112,9 @@ class _Summary extends StatelessWidget {
 }
 
 class _UnsetNotice extends StatelessWidget {
-  const _UnsetNotice({required this.count});
-  final int count;
+  const _UnsetNotice({required this.unset, required this.unknownCurrency});
+  final int unset;
+  final int unknownCurrency;
 
   @override
   Widget build(BuildContext context) => Card.outlined(
@@ -123,9 +128,14 @@ class _UnsetNotice extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '有 $count 個帳戶還沒設定餘額。CWMoney 的 CSV 沒有期初餘額，'
-              '目前的數字只是紀錄的加總。點帳戶輸入今天的實際餘額（例如網銀顯示的金額），'
-              '就會自動算出期初餘額。',
+              [
+                if (unset > 0)
+                  '有 $unset 個帳戶還沒設定餘額。CWMoney 的 CSV 沒有期初餘額，'
+                      '目前的數字只是紀錄的加總。點帳戶輸入今天的實際餘額（例如網銀顯示的金額），'
+                      '就會自動算出期初餘額。',
+                if (unknownCurrency > 0)
+                  '有 $unknownCurrency 個外幣帳戶無法從名稱判斷幣別，請點帳戶選擇幣別。',
+              ].join('\n'),
             ),
           ),
         ],
@@ -144,14 +154,17 @@ class _AccountTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final a = balance.account;
     return ListTile(
-      leading: balance.isSet
+      leading: balance.isSet && a.currency != unknownCurrency
           ? const Icon(Icons.account_balance_wallet_outlined)
           : Icon(Icons.error_outline, color: scheme.tertiary),
       title: Text(a.name),
       subtitle: Text(
-        balance.isSet
-            ? '期初 ${formatMoney(balance.opening, currency: a.currency)}'
-            : '尚未設定餘額',
+        [
+          if (a.currency == unknownCurrency) '幣別未知',
+          balance.isSet
+              ? '期初 ${formatMoney(balance.opening, currency: a.currency)}'
+              : '尚未設定餘額',
+        ].join(' · '),
       ),
       trailing: Text(
         formatMoney(balance.current, currency: a.currency),
@@ -163,7 +176,7 @@ class _AccountTile extends StatelessWidget {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => AccountBalanceScreen(app: app, accountId: a.id),
+          builder: (_) => AccountScreen(app: app, accountId: a.id),
         ),
       ),
     );

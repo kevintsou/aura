@@ -103,4 +103,34 @@ void main() {
     expect(b.opening, d('500'));
     expect(b.openingAnchor(d('700'), today: today).date, today);
   });
+
+  group('updateAccount', () {
+    test('corrects type and currency, keeping amounts and the anchor', () {
+      final anchor = BalanceAnchor(amount: d('100'), date: today);
+      ledger
+        ..setBalanceAnchor(savings, anchor)
+        ..updateAccount(savings, type: AccountType.securities, currency: 'USD');
+      final a = ledger.account(savings)!;
+      expect(a.type, AccountType.securities);
+      expect(a.currency, 'USD');
+      expect(a.anchor, anchor);
+      expect(computeBalances(ledger, today: today)[savings]!.current, d('100'));
+    });
+
+    test('changes only what is given', () {
+      ledger.updateAccount(savings, currency: 'JPY');
+      expect(ledger.account(savings)!.type, AccountType.bank);
+    });
+
+    test('rejects bad input', () {
+      expect(() => ledger.updateAccount('nope'), throwsArgumentError);
+      expect(() => ledger.updateAccount(savings, currency: 'us'), throwsArgumentError);
+    });
+  });
+
+  test('isCurrencyCode', () {
+    expect(isCurrencyCode('TWD'), isTrue);
+    expect(isCurrencyCode('twd'), isFalse);
+    expect(isCurrencyCode('US'), isFalse);
+  });
 }

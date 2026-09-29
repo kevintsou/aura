@@ -391,5 +391,5 @@ String guessCurrency(String name, {required bool foreign}) {
   if (has(['歐元', 'EUR'])) return 'EUR';
   if (has(['人民幣', 'CNY', 'RMB'])) return 'CNY';
   if (has(['港幣', 'HKD'])) return 'HKD';
-  return foreign ? 'XXX' : baseCurrency;
+  return foreign ? unknownCurrency : baseCurrency;
 }

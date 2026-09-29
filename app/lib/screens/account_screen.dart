@@ -8,10 +8,31 @@ import 'accounts_screen.dart';
 
 enum _Mode { today, opening, onDate }
 
-/// Sets an account's real balance: today's, the opening one, or the one
-/// on a chosen day. The other figures are derived and previewed live.
-class AccountBalanceScreen extends StatefulWidget {
-  const AccountBalanceScreen({
+const _otherCurrency = '__other';
+
+/// Currencies offered in the picker; any ISO code can be typed instead.
+const commonCurrencies = {
+  'TWD': '新台幣',
+  'USD': '美元',
+  'JPY': '日圓',
+  'EUR': '歐元',
+  'CNY': '人民幣',
+  'HKD': '港幣',
+  'GBP': '英鎊',
+  'AUD': '澳幣',
+  'CAD': '加幣',
+  'SGD': '新加坡幣',
+  'KRW': '韓元',
+  'THB': '泰銖',
+  'CHF': '瑞士法郎',
+  'NZD': '紐西蘭幣',
+};
+
+/// One account: correct its type and currency (the importer guesses them
+/// from the name) and set its real balance: today's, the opening one, or
+/// the one on a chosen day. Derived figures are previewed live.
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({
     super.key,
     required this.app,
     required this.accountId,
@@ -21,11 +42,14 @@ class AccountBalanceScreen extends StatefulWidget {
   final String accountId;
 
   @override
-  State<AccountBalanceScreen> createState() => _AccountBalanceScreenState();
+  State<AccountScreen> createState() => _AccountScreenState();
 }
 
-class _AccountBalanceScreenState extends State<AccountBalanceScreen> {
+class _AccountScreenState extends State<AccountScreen> {
   final _amount = TextEditingController();
+  final _customCurrency = TextEditingController();
+  late AccountType _type;
+  late String _currencyChoice;
   var _mode = _Mode.today;
   late DateTime _date;
   late final List<AccountFlow> _flows;
@@ -45,13 +69,46 @@ class _AccountBalanceScreenState extends State<AccountBalanceScreen> {
     _date = _saved.anchor?.date ?? _today;
     if (_saved.isSet) _amount.text = _saved.current.toString();
     _amount.addListener(() => setState(() {}));
+    _customCurrency.addListener(() => setState(() {}));
+    _type = _account.type;
+    _currencyChoice = _account.currency == unknownCurrency
+        ? unknownCurrency
+        : commonCurrencies.containsKey(_account.currency)
+        ? _account.currency
+        : _otherCurrency;
+    if (_currencyChoice == _otherCurrency) {
+      _customCurrency.text = _account.currency;
+    }
   }
 
   @override
   void dispose() {
     _amount.dispose();
+    _customCurrency.dispose();
     super.dispose();
   }
+
+  /// The chosen currency, or null while the typed code is invalid.
+  String? get _currency {
+    if (_currencyChoice != _otherCurrency) return _currencyChoice;
+    final code = _customCurrency.text.trim().toUpperCase();
+    return isCurrencyCode(code) ? code : null;
+  }
+
+  bool get _detailsChanged =>
+      _type != _account.type || _currency != _account.currency;
+
+  /// Whether saving would change the account's balances.
+  bool get _balanceChanged {
+    final p = _preview;
+    return p != null &&
+        (!_saved.isSet || p.current != _saved.current || p.opening != _saved.opening);
+  }
+
+  bool get _canSave =>
+      _currency != null &&
+      (_amount.text.trim().isEmpty || _entered != null) &&
+      (_detailsChanged || _balanceChanged);
 
   Decimal? get _entered =>
       Decimal.tryParse(_amount.text.replaceAll(RegExp(r'[,\s]|NT\$'), ''));
@@ -90,9 +147,11 @@ class _AccountBalanceScreenState extends State<AccountBalanceScreen> {
   }
 
   void _save() {
-    final c = _candidate;
-    if (c == null) return;
-    _app.setBalanceAnchor(widget.accountId, c);
+    if (!_canSave) return;
+    if (_detailsChanged) {
+      _app.updateAccount(widget.accountId, type: _type, currency: _currency);
+    }
+    if (_balanceChanged) _app.setBalanceAnchor(widget.accountId, _candidate);
     Navigator.pop(context);
   }
 
@@ -106,15 +165,16 @@ class _AccountBalanceScreenState extends State<AccountBalanceScreen> {
     final theme = Theme.of(context);
     final a = _account;
     final preview = _preview;
-    final isCredit = a.type == AccountType.credit;
-    String money(Decimal d) => formatMoney(d, currency: a.currency);
+    final isCredit = _type == AccountType.credit;
+    final currency = _currency ?? a.currency;
+    String money(Decimal d) => formatMoney(d, currency: currency);
     return Scaffold(
       appBar: AppBar(
         title: Text(a.name),
         actions: [
           TextButton(
-            key: const Key('saveBalance'),
-            onPressed: _candidate == null ? null : _save,
+            key: const Key('saveAccount'),
+            onPressed: _canSave ? _save : null,
             child: const Text('儲存'),
           ),
         ],
@@ -123,11 +183,83 @@ class _AccountBalanceScreenState extends State<AccountBalanceScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            '${accountTypeLabels[a.type]} · ${a.currency} · ${_saved.flowCount} 筆紀錄'
+            '${_saved.flowCount} 筆紀錄'
             '${_saved.firstDate == null ? '' : '（${formatDate(_saved.firstDate!)} – ${formatDate(_saved.lastDate!)}）'}',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<AccountType>(
+                  key: const Key('accountType'),
+                  initialValue: _type,
+                  decoration: const InputDecoration(
+                    labelText: '類型',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final t in AccountType.values)
+                      DropdownMenuItem(value: t, child: Text(accountTypeLabels[t]!)),
+                  ],
+                  onChanged: (t) => setState(() => _type = t!),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: const Key('accountCurrency'),
+                  initialValue: _currencyChoice,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: '幣別',
+                    border: const OutlineInputBorder(),
+                    errorText: _currencyChoice == unknownCurrency ? '請選擇幣別' : null,
+                  ),
+                  items: [
+                    if (_currencyChoice == unknownCurrency)
+                      const DropdownMenuItem(
+                        value: unknownCurrency,
+                        child: Text('未知'),
+                      ),
+                    for (final e in commonCurrencies.entries)
+                      DropdownMenuItem(value: e.key, child: Text('${e.key} ${e.value}')),
+                    const DropdownMenuItem(value: _otherCurrency, child: Text('其他…')),
+                  ],
+                  onChanged: (c) => setState(() => _currencyChoice = c!),
+                ),
+              ),
+            ],
+          ),
+          if (_currencyChoice == _otherCurrency) ...[
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('customCurrency'),
+              controller: _customCurrency,
+              textCapitalization: TextCapitalization.characters,
+              maxLength: 3,
+              decoration: InputDecoration(
+                labelText: '幣別代碼（ISO 4217）',
+                hintText: '例如 MYR',
+                errorText: _customCurrency.text.isNotEmpty && _currency == null
+                    ? '請輸入三個英文字母'
+                    : null,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+          if (_currency != null && _currency != a.currency)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '只會更改幣別標示，金額數字不會換算。',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          const SizedBox(height: 24),
+          Text('餘額', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
           SegmentedButton<_Mode>(
             segments: const [
               ButtonSegment(value: _Mode.today, label: Text('今天')),
@@ -149,14 +281,13 @@ class _AccountBalanceScreenState extends State<AccountBalanceScreen> {
           TextField(
             key: const Key('balanceAmount'),
             controller: _amount,
-            autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(
               signed: true,
               decimal: true,
             ),
             decoration: InputDecoration(
               labelText: _amountLabel,
-              prefixText: a.currency == baseCurrency ? 'NT\$ ' : '${a.currency} ',
+              prefixText: currency == baseCurrency ? 'NT\$ ' : '$currency ',
               helperText: isCredit
                   ? '信用卡欠款請輸入負數，例如 -12000'
                   : '例如網銀或存摺上顯示的金額',

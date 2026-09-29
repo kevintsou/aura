@@ -36,7 +36,23 @@ class Account {
     currency: currency,
     anchor: anchor,
   );
+
+  Account copyWith({AccountType? type, String? currency}) => Account(
+    id: id,
+    name: name,
+    type: type ?? this.type,
+    currency: currency ?? this.currency,
+    anchor: anchor,
+  );
 }
+
+/// Placeholder currency for accounts whose currency is not known.
+const unknownCurrency = 'XXX';
+
+final _currencyCode = RegExp(r'^[A-Z]{3}$');
+
+/// Whether [code] looks like an ISO 4217 code (three capital letters).
+bool isCurrencyCode(String code) => _currencyCode.hasMatch(code);
 
 /// Two-level category. A main category has no [parentId].
 class Category {

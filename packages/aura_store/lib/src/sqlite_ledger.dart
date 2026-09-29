@@ -120,6 +120,22 @@ class SqliteLedger implements LedgerStore {
   }
 
   @override
+  void updateAccount(String accountId, {AccountType? type, String? currency}) {
+    if (currency != null && !isCurrencyCode(currency)) {
+      throw ArgumentError.value(currency, 'currency');
+    }
+    _db.execute(
+      'UPDATE accounts SET type = coalesce(?, type), '
+      'currency = coalesce(?, currency) WHERE id = ?',
+      [type?.name, currency, accountId],
+    );
+    if (_db.updatedRows == 0) {
+      throw ArgumentError.value(accountId, 'accountId');
+    }
+    _loadReferenceData();
+  }
+
+  @override
   String? meta(String key) =>
       _db
               .select('SELECT value FROM meta WHERE key = ?', [key])

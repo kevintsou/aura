@@ -50,6 +50,12 @@ class AppState extends ChangeNotifier {
     return _balances!;
   }
 
+  void updateAccount(String accountId, {AccountType? type, String? currency}) {
+    ledger.updateAccount(accountId, type: type, currency: currency);
+    revision++;
+    notifyListeners();
+  }
+
   void setBalanceAnchor(String accountId, BalanceAnchor? anchor) {
     ledger.setBalanceAnchor(accountId, anchor);
     revision++;
@@ -79,6 +85,7 @@ class AppState extends ChangeNotifier {
     } on CwmFormatException catch (e) {
       return e.message;
     }
+    _carryOverAccountDetails(result.ledger);
     final (kept, dropped) = _carryOverAnchors(result.ledger);
     try {
       ledger.replaceAll(result.ledger);
@@ -95,6 +102,22 @@ class AppState extends ChangeNotifier {
     assistant.reset();
     notifyListeners();
     return null;
+  }
+
+  /// Keeps the type and currency of accounts that existed before (matched
+  /// by name), so corrections survive a re-import. An unknown currency is
+  /// not carried over: the new file may let the importer tell.
+  void _carryOverAccountDetails(InMemoryLedger imported) {
+    final previous = {for (final a in ledger.accounts) a.name: a};
+    for (final a in imported.accounts) {
+      final old = previous[a.name];
+      if (old == null) continue;
+      imported.updateAccount(
+        a.id,
+        type: old.type,
+        currency: old.currency == unknownCurrency ? null : old.currency,
+      );
+    }
   }
 
   /// Re-applies the balances the user set, matched by account name, to a
