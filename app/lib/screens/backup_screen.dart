@@ -44,7 +44,7 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _restoreFromFile() async {
-    final picked = await _app.files.pick();
+    final picked = await _app.lock.whileAway(_app.files.pick);
     if (picked == null || !mounted) return;
     await _restore(picked.bytes, source: picked.name);
   }

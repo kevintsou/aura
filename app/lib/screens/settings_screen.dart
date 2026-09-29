@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../lock/lock_settings_screen.dart';
 import 'ai_settings_screen.dart';
 import 'backup_screen.dart';
 import 'budgets_screen.dart';
@@ -16,7 +17,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: app,
+    listenable: Listenable.merge([app, app.lock]),
     builder: (context, _) => Scaffold(
       appBar: AppBar(title: const Text('設定')),
       body: ListView(
@@ -52,6 +53,17 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => BackupScreen(app: app)),
+            ),
+          ),
+          ListTile(
+            key: const Key('appLock'),
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('App 鎖'),
+            subtitle: Text(app.lock.enabled ? '已開啟' : '用 PIN 碼或指紋保護帳本'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => LockSettingsScreen(lock: app.lock)),
             ),
           ),
           ListTile(

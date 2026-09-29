@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Calls the AI endpoint the user configures. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- App lock: unlock with fingerprint or face. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Cleartext is allowed only so local endpoints (Ollama, LM Studio on
          the LAN) work; AiEndpointConfig.validate rejects http for any
          non-local host. -->

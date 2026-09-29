@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app_state.dart';
+import 'lock/app_lock.dart';
+import 'lock/lock_screen.dart';
 import 'screens/accounts_screen.dart';
 import 'screens/assistant_screen.dart';
 import 'screens/reports_screen.dart';
@@ -15,10 +17,14 @@ import 'services/snapshot_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final lock = AppLock(store: DeviceLockStore(), biometrics: DeviceBiometrics());
+  // Before the first frame, so a locked app never shows its data.
+  await lock.load();
   final app = AppState(
     ledger: await openLedgerStore(),
     settings: DeviceAiSettingsStore(),
     snapshots: await openSnapshotStore(),
+    lock: lock,
   );
   await app.load();
   // In the background: a slow snapshot must not delay the first frame.
@@ -46,6 +52,7 @@ class AuraApp extends StatelessWidget {
       locale: const Locale('zh', 'TW'),
       supportedLocales: const [Locale('zh', 'TW'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      builder: (context, child) => LockGate(lock: app.lock, child: child!),
       home: HomeShell(app: app),
     );
   }

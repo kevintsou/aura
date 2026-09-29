@@ -2,6 +2,7 @@ import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
 import 'package:flutter/foundation.dart' hide Category;
 
+import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
 import 'services/snapshot_store.dart';
@@ -74,13 +75,18 @@ class AppState extends ChangeNotifier {
     this.clientFactory = _defaultClient,
     this.kdfIterations = backupKdfIterations,
     DateTime Function()? clock,
-  }) : files = files ?? DeviceBackupFiles(),
+    AppLock? lock,
+  }) : lock = lock ?? AppLock.off(),
+       files = files ?? DeviceBackupFiles(),
        snapshots = snapshots ?? MemorySnapshotStore(),
        clock = clock ?? DateTime.now;
 
   /// Persistent on devices (SQLite), in memory on the web and in tests.
   final LedgerStore ledger;
   final AiSettingsStore settings;
+
+  /// PIN / biometric lock in front of the whole app.
+  final AppLock lock;
   final BackupFiles files;
   final SnapshotStore snapshots;
 
@@ -300,7 +306,7 @@ class AppState extends ChangeNotifier {
     final now = clock();
     final name = 'aura-${now.year}${_two(now.month)}${_two(now.day)}-'
         '${_two(now.hour)}${_two(now.minute)}.$backupExtension';
-    if (!await files.save(name, bytes)) return null;
+    if (!await lock.whileAway(() => files.save(name, bytes))) return null;
     ledger.setMeta(_metaLastBackup, now.toIso8601String());
     notifyListeners();
     return name;

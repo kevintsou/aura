@@ -7,7 +7,7 @@ import '../format.dart';
 /// Picks a CWMoney export and imports it: straight in when the ledger is
 /// blank, otherwise after the user chooses between merging and replacing.
 Future<void> importCwmoneyFile(BuildContext context, AppState app) async {
-  final file = await app.files.pick(title: '選擇 CWMoney 匯出的 CSV');
+  final file = await app.lock.whileAway(() => app.files.pick(title: '選擇 CWMoney 匯出的 CSV'));
   if (file == null || !context.mounted) return;
   final bytes = file.bytes;
   if (app.isBlank) {
