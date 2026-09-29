@@ -290,6 +290,81 @@ void ledgerStoreContract(LedgerStore Function() create) {
     });
   });
 
+  group('recurring', () {
+    Recurring monthly(String id, {String? account, String? categoryId, int every = 1, DateTime? until}) => Recurring(
+      id: id,
+      template: expense('tpl', date: DateTime(2026, 9, 5), accountId: account, categoryId: categoryId),
+      unit: RepeatUnit.month,
+      every: every,
+      until: until,
+      next: DateTime(2026, 9, 5),
+    );
+
+    test('set, change, record and delete', () {
+      l
+        ..setRecurring(monthly('r1'))
+        ..setRecurring(monthly('r2', account: bank.id));
+      expect([for (final r in l.recurrings) (r.id, r.template.accountId)], [('r1', cash.id), ('r2', bank.id)]);
+      l.setRecurring(monthly('r1', every: 2));
+      final r1 = l.recurrings.first;
+      expect((r1.every, r1.unit, r1.next, r1.template.note, r1.template.amount), (2, RepeatUnit.month, DateTime(2026, 9, 5), null, Decimal.parse('120')));
+
+      recordDueRecurring(l, today: DateTime(2026, 9, 30));
+      expect(l.txn('r1@2026-09-05')!.recurringId, 'r1');
+      expect(l.txn('nope'), isNull);
+      expect(l.recurrings.first.next, DateTime(2026, 11, 5));
+
+      l.deleteRecurring('r1');
+      expect([for (final r in l.recurrings) r.id], ['r2']);
+      expect(l.txn('r1@2026-09-05')!.recurringId, isNull, reason: 'records stay, unlinked');
+      expect(l.txn('r2@2026-09-05')!.recurringId, 'r2');
+      expect(() => l.deleteRecurring('r1'), throwsArgumentError);
+    });
+
+    test('rejects broken rules', () {
+      expect(() => l.setRecurring(monthly('r', every: 0)), throwsArgumentError);
+      expect(() => l.setRecurring(monthly('r', until: DateTime(2026, 9, 4))), throwsArgumentError);
+      expect(() => l.setRecurring(monthly('r', account: 'nope')), throwsArgumentError);
+      expect(
+        () => l.setRecurring(
+          Recurring(
+            id: 'r',
+            template: Txn(
+              id: 't',
+              kind: TxnKind.transfer,
+              date: DateTime(2026, 9, 5),
+              accountId: cash.id,
+              amount: Decimal.one,
+              baseAmount: Decimal.one,
+            ),
+            unit: RepeatUnit.month,
+          ),
+        ),
+        throwsArgumentError,
+        reason: 'a repeating transfer needs both accounts',
+      );
+      expect(l.recurrings, isEmpty);
+    });
+
+    test('keep the accounts and categories they use', () {
+      l.setRecurring(monthly('r1', account: bank.id));
+      expect(() => l.deleteAccount(bank.id), throwsStateError);
+      expect(() => l.deleteCategory('food'), throwsStateError, reason: 'via its subcategory');
+      l.deleteRecurring('r1');
+      l
+        ..deleteAccount(bank.id)
+        ..deleteCategory('food');
+    });
+
+    test('are replaced by replaceAll', () {
+      l.setRecurring(monthly('r1'));
+      l.replaceAll(InMemoryLedger(accounts: [cash], categories: [food, lunch], recurrings: [monthly('r9')]));
+      expect([for (final r in l.recurrings) r.id], ['r9']);
+      l.replaceAll(InMemoryLedger());
+      expect(l.recurrings, isEmpty);
+    });
+  });
+
   test('meta values are listed', () {
     l
       ..setMeta('a', '1')

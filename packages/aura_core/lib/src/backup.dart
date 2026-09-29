@@ -8,6 +8,7 @@ import 'package:decimal/decimal.dart';
 import 'balance.dart';
 import 'ledger.dart';
 import 'model.dart';
+import 'recurring.dart';
 
 /// Aura backup files (`.aura`): gzip-compressed JSON holding the whole
 /// ledger, optionally encrypted with a password (PBKDF2-HMAC-SHA256 →
@@ -89,6 +90,18 @@ Future<Uint8List> encodeBackup(
     'budgets': [
       for (final b in ledger.budgets)
         {'id': b.id, if (b.categoryId != null) 'categoryId': b.categoryId, 'amount': '${b.amount}'},
+    ],
+    'recurring': [
+      for (final r in ledger.recurrings)
+        {
+          'id': r.id,
+          'template': _txnToJson(r.template),
+          'unit': r.unit.name,
+          'every': r.every,
+          'until': ?(r.until == null ? null : _date(r.until!)),
+          'times': ?r.times,
+          'next': ?(r.next == null ? null : _date(r.next!)),
+        },
     ],
     'transactions': [for (final t in txns) _txnToJson(t)],
     'meta': meta,
@@ -244,12 +257,26 @@ BackupInfo _info(Map<String, Object?> envelope) {
         amount: Decimal.parse(b['amount'] as String),
       ),
   ];
+  // So did recurring items.
+  final recurrings = [
+    for (final r in d['recurring'] as List? ?? const [])
+      Recurring(
+        id: (r as Map)['id'] as String,
+        template: _txnFromJson(r['template'] as Map<String, Object?>),
+        unit: RepeatUnit.values.byName(r['unit'] as String),
+        every: r['every'] as int,
+        until: _parseDate(r['until']),
+        times: r['times'] as int?,
+        next: _parseDate(r['next']),
+      ),
+  ];
   final ledger = InMemoryLedger(
     accounts: accounts,
     categories: categories,
     projects: projects,
     transactions: txns,
     budgets: budgets,
+    recurrings: recurrings,
   );
   // Check integrity only, not today's naming rules: an old backup must
   // stay restorable even if the app has since become stricter.
@@ -265,6 +292,14 @@ BackupInfo _info(Map<String, Object?> envelope) {
   unique('專案', projects.map((p) => p.id));
   unique('紀錄', txns.map((t) => t.id));
   unique('預算', budgets.map((b) => b.id));
+  unique('週期收支', recurrings.map((r) => r.id));
+  for (final r in recurrings) {
+    try {
+      checkTxn(ledger, r.template);
+    } on ArgumentError catch (e) {
+      throw BackupException('備份檔的內容不一致：週期收支${e.message}');
+    }
+  }
   for (final b in budgets) {
     if (b.categoryId != null && ledger.category(b.categoryId!) == null) {
       throw BackupException('備份檔的內容不一致：預算的分類不存在');
@@ -346,6 +381,7 @@ Map<String, Object?> _txnToJson(Txn t) => {
   'place': ?t.place,
   'createdAt': ?t.createdAt?.toIso8601String(),
   'feeOf': ?t.feeOfTxnId,
+  'recurringId': ?t.recurringId,
   if (t.needsReview) 'needsReview': true,
   if (t.legacyRows.isNotEmpty) 'legacyRows': t.legacyRows,
   if (t.invoice case final i?)
@@ -382,6 +418,7 @@ Txn _txnFromJson(Map<String, Object?> j) {
     place: j['place'] as String?,
     createdAt: j['createdAt'] == null ? null : DateTime.parse(j['createdAt'] as String),
     feeOfTxnId: j['feeOf'] as String?,
+    recurringId: j['recurringId'] as String?,
     needsReview: j['needsReview'] as bool? ?? false,
     legacyRows: [
       for (final row in j['legacyRows'] as List? ?? const [])

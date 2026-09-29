@@ -33,6 +33,7 @@ class SqliteLedger implements LedgerStore {
   var _categories = <String, Category>{};
   var _projects = <String, Project>{};
   var _budgets = <Budget>[];
+  var _recurrings = <Recurring>[];
 
   int get schemaVersion => _db.userVersion;
 
@@ -77,6 +78,40 @@ class SqliteLedger implements LedgerStore {
           amount: Decimal.parse(r['amount'] as String),
         ),
     ]);
+    _recurrings = [
+      for (final r in _db.select('SELECT * FROM recurring ORDER BY sort'))
+        Recurring(
+          id: r['id'] as String,
+          template: Txn(
+            id: r['id'] as String,
+            kind: TxnKind.values.byName(r['kind'] as String),
+            date: _parseDate(r['start_date'] as String),
+            accountId: r['account_id'] as String,
+            toAccountId: r['to_account_id'] as String?,
+            amount: Decimal.parse(r['amount'] as String),
+            toAmount: switch (r['to_amount']) {
+              final String s => Decimal.parse(s),
+              _ => null,
+            },
+            baseAmount: Decimal.parse(r['base_amount'] as String),
+            fxRateDisplay: r['fx_rate_display'] as String?,
+            categoryId: r['category_id'] as String?,
+            projectId: r['project_id'] as String?,
+            note: r['note'] as String?,
+          ),
+          unit: RepeatUnit.values.byName(r['unit'] as String),
+          every: r['every'] as int,
+          until: switch (r['until']) {
+            final String s => _parseDate(s),
+            _ => null,
+          },
+          times: r['times'] as int?,
+          next: switch (r['next_date']) {
+            final String s => _parseDate(s),
+            _ => null,
+          },
+        ),
+    ];
   }
 
   @override
@@ -87,6 +122,8 @@ class SqliteLedger implements LedgerStore {
   List<Project> get projects => List.unmodifiable(_projects.values);
   @override
   List<Budget> get budgets => List.unmodifiable(_budgets);
+  @override
+  List<Recurring> get recurrings => List.unmodifiable(_recurrings);
 
   @override
   Account? account(String id) => _accounts[id];
@@ -315,6 +352,7 @@ class SqliteLedger implements LedgerStore {
         _ => null,
       },
       feeOfTxnId: r['fee_of_txn_id'] as String?,
+      recurringId: r['recurring_id'] as String?,
       needsReview: (r['needs_review'] as int) != 0,
       legacyRows: legacy == null
           ? const []
@@ -329,7 +367,7 @@ class SqliteLedger implements LedgerStore {
   void replaceAll(LedgerReader source) {
     _atomic(() {
       for (final table in const [
-        'invoice_items', 'invoices', 'txns', 'budgets', 'categories', 'projects', //
+        'invoice_items', 'invoices', 'txns', 'recurring', 'budgets', 'categories', 'projects', //
         'accounts',
       ]) {
         _db.execute('DELETE FROM $table');
@@ -366,6 +404,7 @@ class SqliteLedger implements LedgerStore {
     final order = {for (final (i, c) in source.categories.indexed) c.id: i};
     each(_insertCategory, cats, (c, _) => _categoryArgs(c, order[c.id]!));
     each(_insertBudget, source.budgets, (b, i) => [b.id, b.categoryId, b.amount.toString(), i]);
+    each(_insertRecurring, source.recurrings, _recurringArgs);
     final txns = source.transactions();
     each(_insertTxn, txns, (t, _) => _txnArgs(t));
     final withInvoice = txns.where((t) => t.invoice != null);
@@ -409,6 +448,7 @@ class SqliteLedger implements LedgerStore {
       throw ArgumentError.value(accountId, 'accountId');
     }
     checkUnused(count(TxnFilter(accountIds: {accountId})), '帳戶');
+    checkNotRecurring(this, accountId: accountId);
     _db.execute('DELETE FROM accounts WHERE id = ?', [accountId]);
     _loadReferenceData();
   }
@@ -436,6 +476,7 @@ class SqliteLedger implements LedgerStore {
       throw ArgumentError.value(categoryId, 'categoryId');
     }
     checkUnused(count(TxnFilter(categoryIds: {categoryId})), '分類');
+    checkNotRecurring(this, categoryId: categoryId);
     _atomic(() {
       _db
         ..execute('DELETE FROM categories WHERE parent_id = ?', [categoryId])
@@ -495,6 +536,40 @@ class SqliteLedger implements LedgerStore {
     _loadReferenceData();
   }
 
+  @override
+  void setRecurring(Recurring recurring) {
+    checkRecurring(this, recurring);
+    final args = _recurringArgs(recurring, _nextSort('recurring'));
+    _db.execute(
+      '$_insertRecurring ON CONFLICT(id) DO UPDATE SET '
+      'kind = excluded.kind, start_date = excluded.start_date, account_id = excluded.account_id, '
+      'to_account_id = excluded.to_account_id, amount = excluded.amount, to_amount = excluded.to_amount, '
+      'base_amount = excluded.base_amount, fx_rate_display = excluded.fx_rate_display, '
+      'category_id = excluded.category_id, project_id = excluded.project_id, note = excluded.note, '
+      'unit = excluded.unit, every = excluded.every, until = excluded.until, times = excluded.times, '
+      'next_date = excluded.next_date',
+      args,
+    );
+    _loadReferenceData();
+  }
+
+  @override
+  void deleteRecurring(String recurringId) {
+    _atomic(() {
+      _db.execute('DELETE FROM recurring WHERE id = ?', [recurringId]);
+      if (_db.updatedRows == 0) throw ArgumentError.value(recurringId, 'recurringId');
+      _db.execute('UPDATE txns SET recurring_id = NULL WHERE recurring_id = ?', [recurringId]);
+    });
+    _loadReferenceData();
+  }
+
+  @override
+  Txn? txn(String id) {
+    final r = _db.select('SELECT * FROM txns WHERE id = ?', [id]).firstOrNull;
+    if (r == null) return null;
+    return _txnFromRow(r, _invoicesFor('WHERE id = ?', [id])[id]);
+  }
+
   bool _txnExists(String id) =>
       _db.select('SELECT 1 FROM txns WHERE id = ?', [id]).isNotEmpty;
 
@@ -529,7 +604,7 @@ class SqliteLedger implements LedgerStore {
         'UPDATE txns SET kind = ?, date = ?, account_id = ?, to_account_id = ?, '
         'amount = ?, to_amount = ?, base_amount = ?, fx_rate_display = ?, '
         'category_id = ?, project_id = ?, note = ?, place = ?, created_at = ?, '
-        'fee_of_txn_id = ?, needs_review = ?, legacy_rows = ? WHERE id = ?',
+        'fee_of_txn_id = ?, needs_review = ?, legacy_rows = ?, recurring_id = ? WHERE id = ?',
         [...args.skip(1), txn.id],
       );
       _writeInvoice(txn);
@@ -606,8 +681,8 @@ const _insertBudget = 'INSERT INTO budgets (id, category_id, amount, sort) VALUE
 const _insertTxn =
     'INSERT INTO txns (id, kind, date, account_id, to_account_id, amount, '
     'to_amount, base_amount, fx_rate_display, category_id, project_id, note, '
-    'place, created_at, fee_of_txn_id, needs_review, legacy_rows) '
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    'place, created_at, fee_of_txn_id, needs_review, legacy_rows, recurring_id) '
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
 /// Values for [_insertTxn]; the id comes first.
 List<Object?> _txnArgs(Txn t) => [
@@ -628,7 +703,37 @@ List<Object?> _txnArgs(Txn t) => [
   t.feeOfTxnId,
   t.needsReview ? 1 : 0,
   t.legacyRows.isEmpty ? null : jsonEncode(t.legacyRows),
+  t.recurringId,
 ];
+
+const _insertRecurring =
+    'INSERT INTO recurring (id, kind, start_date, account_id, to_account_id, amount, to_amount, '
+    'base_amount, fx_rate_display, category_id, project_id, note, unit, every, until, times, '
+    'next_date, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+List<Object?> _recurringArgs(Recurring r, int sort) {
+  final t = r.template;
+  return [
+    r.id,
+    t.kind.name,
+    formatIsoDate(t.date),
+    t.accountId,
+    t.toAccountId,
+    t.amount.toString(),
+    t.toAmount?.toString(),
+    t.baseAmount.toString(),
+    t.fxRateDisplay,
+    t.categoryId,
+    t.projectId,
+    t.note,
+    r.unit.name,
+    r.every,
+    r.until == null ? null : formatIsoDate(r.until!),
+    r.times,
+    r.next == null ? null : formatIsoDate(r.next!),
+    sort,
+  ];
+}
 
 const _insertInvoice =
     'INSERT INTO invoices (txn_id, number, seller_tax_id, seller_name, '

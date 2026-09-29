@@ -64,6 +64,7 @@ class CwmMergePlan {
       categories: [...current.categories, ...newCategories],
       projects: [...current.projects, ...newProjects],
       budgets: current.budgets,
+      recurrings: current.recurrings,
       transactions: [
         for (final t in current.transactions()) replaced[t.id] ?? t,
         for (final t in added)
@@ -187,28 +188,7 @@ class _Merger {
     );
   }
 
-  Txn _withFee(Txn t, String? feeOf) => feeOf == null
-      ? t.withoutFeeLink()
-      : Txn(
-          id: t.id,
-          kind: t.kind,
-          date: t.date,
-          amount: t.amount,
-          baseAmount: t.baseAmount,
-          accountId: t.accountId,
-          toAccountId: t.toAccountId,
-          toAmount: t.toAmount,
-          fxRateDisplay: t.fxRateDisplay,
-          categoryId: t.categoryId,
-          projectId: t.projectId,
-          note: t.note,
-          place: t.place,
-          invoice: t.invoice,
-          createdAt: t.createdAt,
-          feeOfTxnId: feeOf,
-          needsReview: t.needsReview,
-          legacyRows: t.legacyRows,
-        );
+  Txn _withFee(Txn t, String? feeOf) => t.copyWith(feeOfTxnId: feeOf);
 
   /// [t] with the target ledger's ids. The fee link still points at the
   /// imported id; [run] fixes it once all ids are known.

@@ -55,7 +55,9 @@ class _OverviewTool extends AuraTool {
         'balance_known=false means the user never set a real balance, so '
         'that balance only reflects recorded activity and may be wrong. '
         'budgets are monthly spending limits in the base currency with '
-        'this month\'s spending (category null = all expenses).',
+        'this month\'s spending (category null = all expenses). recurring '
+        'lists repeating records (rent, salary, subscriptions) that the app '
+        'records automatically; amount is in the base currency.',
     parameters: {'type': 'object', 'properties': <String, Object?>{}},
   );
 
@@ -99,6 +101,20 @@ class _OverviewTool extends AuraTool {
               'monthly_amount': _num(b.amount),
               'spent_this_month': _num(b.spent),
               'remaining': _num(b.remaining),
+            },
+        ],
+      if (l.recurrings.isNotEmpty)
+        'recurring': [
+          for (final r in l.recurrings)
+            {
+              'kind': r.template.kind.name,
+              'category': r.template.categoryId == null ? null : l.category(r.template.categoryId!)?.name,
+              'account': l.account(r.template.accountId!)?.name,
+              if (r.template.toAccountId != null) 'to_account': l.account(r.template.toAccountId!)?.name,
+              'amount': _num(r.template.baseAmount),
+              'note': ?r.template.note,
+              'repeats': describeRepeat(r),
+              'next': r.next == null ? null : _fmtDate(r.next!),
             },
         ],
       'needs_review_count': all.where((t) => t.needsReview).length,

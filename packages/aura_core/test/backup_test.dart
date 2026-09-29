@@ -16,11 +16,16 @@ Object? _snapshot(LedgerReader l) => [
   [for (final p in l.projects) [p.id, p.name]],
   [for (final b in l.budgets) [b.id, b.categoryId, b.amount]],
   [
+    for (final r in l.recurrings)
+      [r.id, r.unit, r.every, r.until, r.times, r.next, r.template.accountId, r.template.categoryId, r.template.amount,
+        r.template.note, r.template.date],
+  ],
+  [
     for (final t in l.transactions())
       [
         t.id, t.kind, t.date, t.accountId, t.toAccountId, t.amount, t.toAmount, //
         t.baseAmount, t.fxRateDisplay, t.categoryId, t.projectId, t.note,
-        t.place, t.createdAt, t.feeOfTxnId, t.needsReview, t.legacyRows,
+        t.place, t.createdAt, t.feeOfTxnId, t.recurringId, t.needsReview, t.legacyRows,
         t.invoice?.number, t.invoice?.sellerTaxId, t.invoice?.sellerName,
         t.invoice?.sellerAddress, t.invoice?.carrier,
         [for (final i in t.invoice?.items ?? const <InvoiceItem>[]) [i.name, i.quantity, i.amount]],
@@ -52,6 +57,26 @@ void main() {
           categoryId: ledger.categories.firstWhere((c) => c.name == '生活費').id,
         ),
       );
+    final cash = ledger.accounts.firstWhere((a) => a.name == '現金');
+    ledger.setRecurring(
+      Recurring(
+        id: 'rent',
+        template: Txn(
+          id: 'tpl',
+          kind: TxnKind.expense,
+          date: DateTime(2026, 9, 20),
+          accountId: cash.id,
+          amount: Decimal.fromInt(15000),
+          baseAmount: Decimal.fromInt(15000),
+          note: '房租',
+        ),
+        unit: RepeatUnit.month,
+        times: 12,
+        until: DateTime(2027, 12, 31),
+        next: DateTime(2026, 9, 20),
+      ),
+    );
+    recordDueRecurring(ledger, today: DateTime(2026, 9, 29));
   });
 
   test('round-trips every field without a password', () async {

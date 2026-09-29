@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 
 import 'balance.dart';
 import 'model.dart';
+import 'recurring.dart';
 
 /// Criteria for selecting transactions. All fields are optional and
 /// combined with AND. Date bounds are inclusive.
@@ -44,6 +45,9 @@ abstract interface class LedgerReader {
   /// The whole-month total budget (if any) first, then by creation.
   List<Budget> get budgets;
 
+  /// Repeating records, in the order they were created.
+  List<Recurring> get recurrings;
+
   Account? account(String id);
   Category? category(String id);
   Project? project(String id);
@@ -59,6 +63,9 @@ abstract interface class LedgerReader {
   /// Number of transactions matching [filter].
   int count([TxnFilter filter = const TxnFilter()]);
 
+  /// The transaction with [id], if any.
+  Txn? txn(String id);
+
   /// Every movement of money per account, for balance calculations.
   /// Cheaper than loading full transactions.
   Iterable<AccountFlow> accountFlows();
@@ -67,8 +74,8 @@ abstract interface class LedgerReader {
 /// A ledger that can be written and survives restarts (depending on the
 /// implementation: SQLite on devices, memory in tests and on the web).
 abstract interface class LedgerStore implements LedgerReader {
-  /// Atomically replaces every account, category, project, budget and
-  /// transaction with those of [source].
+  /// Atomically replaces every account, category, project, budget,
+  /// recurring item and transaction with those of [source].
   void replaceAll(LedgerReader source);
 
   /// Sets or clears an account's known balance.
@@ -86,15 +93,16 @@ abstract interface class LedgerStore implements LedgerReader {
 
   void addAccount(Account account);
 
-  /// Only for accounts without records; archive used ones instead.
+  /// Only for accounts without records or recurring items; archive used
+  /// ones instead.
   void deleteAccount(String accountId);
 
   /// Appended after its siblings.
   void addCategory(Category category);
   void renameCategory(String categoryId, String name);
 
-  /// Only for categories no record uses; removes its subcategories and
-  /// their budgets too.
+  /// Only for categories no record or recurring item uses; removes its
+  /// subcategories and their budgets too.
   void deleteCategory(String categoryId);
 
   /// Reorders sibling categories: [ids] take the positions they occupy
@@ -106,6 +114,12 @@ abstract interface class LedgerStore implements LedgerReader {
   /// Adds [budget], or replaces the one with the same id.
   void setBudget(Budget budget);
   void deleteBudget(String budgetId);
+
+  /// Adds [recurring], or replaces the one with the same id.
+  void setRecurring(Recurring recurring);
+
+  /// Records it made stay, no longer linked to it.
+  void deleteRecurring(String recurringId);
 
   void addTxn(Txn txn);
 
@@ -128,9 +142,11 @@ class InMemoryLedger implements LedgerStore {
     List<Project> projects = const [],
     List<Txn> transactions = const [],
     List<Budget> budgets = const [],
+    List<Recurring> recurrings = const [],
   }) {
     _load(accounts, categories, projects, transactions);
     _budgets = {for (final b in budgets) b.id: b};
+    _recurrings = {for (final r in recurrings) r.id: r};
   }
 
   Map<String, Account> _accounts = {};
@@ -138,6 +154,7 @@ class InMemoryLedger implements LedgerStore {
   Map<String, Project> _projects = {};
   List<Txn> _txns = [];
   Map<String, Budget> _budgets = {};
+  Map<String, Recurring> _recurrings = {};
   final Map<String, String> _meta = {};
 
   void _load(
@@ -167,6 +184,7 @@ class InMemoryLedger implements LedgerStore {
       source.transactions(),
     );
     _budgets = {for (final b in source.budgets) b.id: b};
+    _recurrings = {for (final r in source.recurrings) r.id: r};
   }
 
   @override
@@ -211,6 +229,7 @@ class InMemoryLedger implements LedgerStore {
       throw ArgumentError.value(accountId, 'accountId');
     }
     checkUnused(count(TxnFilter(accountIds: {accountId})), '帳戶');
+    checkNotRecurring(this, accountId: accountId);
     _accounts.remove(accountId);
   }
 
@@ -236,6 +255,7 @@ class InMemoryLedger implements LedgerStore {
       throw ArgumentError.value(categoryId, 'categoryId');
     }
     checkUnused(count(TxnFilter(categoryIds: {categoryId})), '分類');
+    checkNotRecurring(this, categoryId: categoryId);
     _categories.removeWhere(
       (id, c) => id == categoryId || c.parentId == categoryId,
     );
@@ -277,6 +297,23 @@ class InMemoryLedger implements LedgerStore {
       throw ArgumentError.value(budgetId, 'budgetId');
     }
   }
+
+  @override
+  void setRecurring(Recurring recurring) {
+    checkRecurring(this, recurring);
+    _recurrings[recurring.id] = recurring;
+  }
+
+  @override
+  void deleteRecurring(String recurringId) {
+    if (_recurrings.remove(recurringId) == null) {
+      throw ArgumentError.value(recurringId, 'recurringId');
+    }
+    _txns = [for (final t in _txns) t.recurringId == recurringId ? t.copyWith(recurringId: null) : t];
+  }
+
+  @override
+  Txn? txn(String id) => _txns.where((t) => t.id == id).firstOrNull;
 
   @override
   void addTxn(Txn txn) {
@@ -335,6 +372,8 @@ class InMemoryLedger implements LedgerStore {
   List<Project> get projects => List.unmodifiable(_projects.values);
   @override
   List<Budget> get budgets => List.unmodifiable(totalFirst(_budgets.values));
+  @override
+  List<Recurring> get recurrings => List.unmodifiable(_recurrings.values);
 
   @override
   Account? account(String id) => _accounts[id];
@@ -473,6 +512,33 @@ void checkBudget(LedgerReader ledger, Budget b) {
       'categoryId',
       b.categoryId == null ? '已經有每月總預算' : '這個分類已經有預算',
     );
+  }
+}
+
+void checkRecurring(LedgerReader ledger, Recurring r) {
+  if (r.every < 1) throw ArgumentError.value(r.every, 'every', '間隔至少是 1');
+  if (r.times != null && r.times! < 1) throw ArgumentError.value(r.times, 'times', '次數至少是 1');
+  if (r.until != null && r.until!.isBefore(r.start)) {
+    throw ArgumentError.value(r.until, 'until', '結束日期不能早於開始日期');
+  }
+  final t = r.template;
+  if (t.accountId == null || (t.kind == TxnKind.transfer && t.toAccountId == null)) {
+    throw ArgumentError.value(t.accountId, 'accountId', '請選擇帳戶');
+  }
+  checkTxn(ledger, t);
+}
+
+/// Accounts and categories a recurring item uses cannot be deleted: its
+/// next occurrence would have nowhere to go.
+void checkNotRecurring(LedgerReader ledger, {String? accountId, String? categoryId}) {
+  final uses = ledger.recurrings.where((r) {
+    final t = r.template;
+    if (accountId != null) return t.accountId == accountId || t.toAccountId == accountId;
+    final c = t.categoryId == null ? null : ledger.category(t.categoryId!);
+    return c != null && (c.id == categoryId || c.parentId == categoryId);
+  }).length;
+  if (uses > 0) {
+    throw StateError('有 $uses 個週期收支用到它，請先修改或刪除那些週期收支');
   }
 }
 

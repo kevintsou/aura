@@ -174,6 +174,7 @@ class Txn {
     this.invoice,
     this.createdAt,
     this.feeOfTxnId,
+    this.recurringId,
     this.needsReview = false,
     this.legacyRows = const [],
   }) : assert(
@@ -223,6 +224,9 @@ class Txn {
   /// Set on a transfer-fee expense to the transfer it belongs to.
   final String? feeOfTxnId;
 
+  /// The [Recurring] item that recorded this, if any.
+  final String? recurringId;
+
   /// Imported data the user should check (e.g. a transfer missing a side).
   final bool needsReview;
 
@@ -230,10 +234,20 @@ class Txn {
   final List<List<String>> legacyRows;
 
   /// This transaction with [feeOfTxnId] cleared (its transfer was deleted).
-  Txn withoutFeeLink() => Txn(
-    id: id,
+  Txn withoutFeeLink() => copyWith(feeOfTxnId: null);
+
+  /// A copy with the given fields changed. [feeOfTxnId] and
+  /// [recurringId] can be cleared by passing null.
+  Txn copyWith({
+    String? id,
+    DateTime? date,
+    DateTime? createdAt,
+    Object? feeOfTxnId = _keep,
+    Object? recurringId = _keep,
+  }) => Txn(
+    id: id ?? this.id,
     kind: kind,
-    date: date,
+    date: date ?? this.date,
     amount: amount,
     baseAmount: baseAmount,
     accountId: accountId,
@@ -245,8 +259,12 @@ class Txn {
     note: note,
     place: place,
     invoice: invoice,
-    createdAt: createdAt,
+    createdAt: createdAt ?? this.createdAt,
+    feeOfTxnId: identical(feeOfTxnId, _keep) ? this.feeOfTxnId : feeOfTxnId as String?,
+    recurringId: identical(recurringId, _keep) ? this.recurringId : recurringId as String?,
     needsReview: needsReview,
     legacyRows: legacyRows,
   );
 }
+
+const _keep = Object();

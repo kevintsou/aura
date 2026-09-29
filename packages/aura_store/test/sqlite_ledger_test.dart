@@ -27,6 +27,7 @@ Map<String, Object?> _fields(Txn t) => {
   'place': t.place,
   'createdAt': t.createdAt,
   'feeOfTxnId': t.feeOfTxnId,
+  'recurringId': t.recurringId,
   'needsReview': t.needsReview,
   'legacyRows': t.legacyRows,
   'invoice': t.invoice == null

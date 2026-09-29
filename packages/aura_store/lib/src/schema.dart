@@ -88,6 +88,31 @@ const migrations = <String>[
     sort        INTEGER NOT NULL
   );
   ''',
+  // 5: recurring records, and the link from each record they made.
+  '''
+  CREATE TABLE recurring (
+    id              TEXT PRIMARY KEY,
+    kind            TEXT NOT NULL CHECK (kind IN ('expense', 'income', 'transfer')),
+    start_date      TEXT NOT NULL,          -- YYYY-MM-DD, the first occurrence
+    account_id      TEXT NOT NULL REFERENCES accounts (id),
+    to_account_id   TEXT REFERENCES accounts (id),
+    amount          TEXT NOT NULL,
+    to_amount       TEXT,
+    base_amount     TEXT NOT NULL,
+    fx_rate_display TEXT,
+    category_id     TEXT REFERENCES categories (id),
+    project_id      TEXT REFERENCES projects (id),
+    note            TEXT,
+    unit            TEXT NOT NULL CHECK (unit IN ('day', 'week', 'month', 'year')),
+    every           INTEGER NOT NULL CHECK (every >= 1),
+    until           TEXT,                   -- YYYY-MM-DD, inclusive
+    times           INTEGER,
+    next_date       TEXT,                   -- NULL once finished
+    sort            INTEGER NOT NULL
+  );
+  ALTER TABLE txns ADD COLUMN recurring_id TEXT;
+  CREATE INDEX txns_by_recurring ON txns (recurring_id);
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

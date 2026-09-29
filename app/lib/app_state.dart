@@ -25,6 +25,7 @@ InMemoryLedger _detached(LedgerReader source) => InMemoryLedger(
   projects: source.projects,
   transactions: source.transactions(),
   budgets: source.budgets,
+  recurrings: source.recurrings,
 );
 
 Future<Uint8List> _encode(

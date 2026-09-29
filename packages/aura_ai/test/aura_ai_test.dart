@@ -196,6 +196,39 @@ void main() {
       ]);
     });
 
+    test('overview lists recurring records', () async {
+      final cash = _ledger.accounts.firstWhere((a) => a.name == '現金');
+      _ledger.setRecurring(
+        Recurring(
+          id: 'r1',
+          template: Txn(
+            id: 'x',
+            kind: TxnKind.expense,
+            date: DateTime(2026, 10, 1),
+            accountId: cash.id,
+            amount: Decimal.fromInt(399),
+            baseAmount: Decimal.fromInt(399),
+            note: '串流訂閱',
+          ),
+          unit: RepeatUnit.month,
+          next: DateTime(2026, 10, 1),
+        ),
+      );
+      addTearDown(() => _ledger.deleteRecurring('r1'));
+      final (_, r) = await _call(_tools(), 'get_ledger_overview');
+      expect(r['recurring'], [
+        {
+          'kind': 'expense',
+          'category': null,
+          'account': '現金',
+          'amount': 399,
+          'note': '串流訂閱',
+          'repeats': '每月 1 日',
+          'next': '2026-10-01',
+        },
+      ]);
+    });
+
     test('aggregates expenses by main category, excluding transfers', () async {
       final (ok, r) = await _call(_tools(), 'aggregate_transactions', {
         'group_by': 'main_category',
