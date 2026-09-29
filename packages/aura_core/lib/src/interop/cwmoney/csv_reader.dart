@@ -79,9 +79,9 @@ CwmExportFormat detectCwmFormat(List<int> bytes) {
 /// on `","`; the note is the last field and may contain anything.
 List<CwmRow> readCwmCsv(List<int> bytes) {
   final format = detectCwmFormat(bytes);
+  if (format == CwmExportFormat.html) return readCwmHtml(bytes);
   if (format != CwmExportFormat.csv) {
     throw CwmFormatException(switch (format) {
-      CwmExportFormat.html => '這是舊版 CWMoney 的 HTML 匯出格式，目前還不支援',
       CwmExportFormat.xlsx => '這是 Excel 活頁簿，請匯入 CWMoney 原始的 CSV 檔',
       _ => '無法辨識的檔案格式，請匯入 CWMoney 經典版匯出的 CSV 檔',
     });
@@ -119,4 +119,52 @@ List<String>? _splitRecord(String line) {
   }
   fields.add(body.substring(start));
   return fields;
+}
+
+final _row = RegExp(r'<tr\b[^>]*>(.*?)</tr>', caseSensitive: false, dotAll: true);
+final _cell = RegExp(r'<t[dh]\b[^>]*>(.*?)</t[dh]>', caseSensitive: false, dotAll: true);
+final _tag = RegExp(r'<[^>]*>');
+final _entity = RegExp(r'&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);');
+const _entities = {'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' '};
+
+String _cellText(String html) => html
+    .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+    .replaceAll(_tag, '')
+    .replaceAllMapped(_entity, (m) {
+      final e = m[1]!;
+      if (e.startsWith('#x')) return String.fromCharCode(int.parse(e.substring(2), radix: 16));
+      if (e.startsWith('#')) return String.fromCharCode(int.parse(e.substring(1)));
+      return _entities[e.toLowerCase()] ?? m[0]!;
+    })
+    .trim();
+
+/// Items, seller and carrier run together on one line in the old
+/// format: put each on its own line, as the newer format has them.
+String _splitInvoiceNote(String note) => note
+    .replaceAllMapped(RegExp(r'(x-?\d+(?:\.\d+)?=-?\d+(?:\.\d+)?)(?=\S)'), (m) => '${m[1]}\n')
+    .replaceAllMapped(RegExp(r'(?<=\S)(\(\d{8},|\[[^,\]]+,)'), (m) => '\n${m[1]}');
+
+/// Parses the older CWMoney export: an Excel HTML table (Big5) with the
+/// same 15 columns, unpadded dates, creation times without seconds and
+/// invoice details on one line. Columns after the 15th (a user's own
+/// additions in Excel) are ignored.
+List<CwmRow> readCwmHtml(List<int> bytes) {
+  final rows = [
+    for (final r in _row.allMatches(decodeBig5Hkscs(bytes)))
+      [for (final c in _cell.allMatches(r[1]!)) _cellText(c[1]!)],
+  ];
+  final headerAt = rows.indexWhere((r) => r.length >= 15 && r.take(15).join(',') == cwmColumns.join(','));
+  if (headerAt < 0) throw CwmFormatException('這個 HTML 檔裡找不到 CWMoney 匯出的標題列');
+  final out = <CwmRow>[];
+  for (var i = headerAt + 1; i < rows.length; i++) {
+    final r = rows[i];
+    if (r.length < 15 || r.take(15).every((f) => f.isEmpty)) continue;
+    final fields = r.take(15).toList();
+    for (final n in [6, 7, 8]) {
+      fields[n] = fields[n].replaceAll(',', '');
+    }
+    if (fields[12].isNotEmpty) fields[14] = _splitInvoiceNote(fields[14]);
+    out.add(CwmRow(fields, i + 1));
+  }
+  return out;
 }

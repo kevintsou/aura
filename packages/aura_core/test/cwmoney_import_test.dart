@@ -29,7 +29,7 @@ void main() {
       expect(rows.first.note.split('\n'), hasLength(5));
     });
 
-    test('detects the legacy HTML export and rejects it clearly', () {
+    test('detects the legacy HTML export; one without the header is rejected clearly', () {
       final html = '<!doctype html public "-//w3c//dtd xhtml 1.0">'.codeUnits;
       expect(detectCwmFormat(html), CwmExportFormat.html);
       expect(() => readCwmCsv(html), throwsA(isA<CwmFormatException>()));
