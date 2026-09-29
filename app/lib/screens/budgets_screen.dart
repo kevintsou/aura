@@ -46,7 +46,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: _app,
     builder: (context, _) {
-      final statuses = budgetStatuses(_app.ledger, _month, today: _app.clock());
+      final statuses = budgetStatuses(_app.view, _month, today: _app.clock());
       final hasTotal = statuses.any((s) => s.category == null);
       return Scaffold(
         appBar: AppBar(title: const Text('預算')),
@@ -247,7 +247,7 @@ class BudgetDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: app,
     builder: (context, _) {
-      final l = app.ledger;
+      final l = app.view;
       final status = budgetStatuses(l, month, today: app.clock()).where((s) => s.budget.id == budgetId).firstOrNull;
       if (status == null) return const Scaffold(body: SizedBox.shrink()); // just deleted
       final categoryId = status.budget.categoryId;
@@ -475,7 +475,7 @@ class _BudgetEditorState extends State<_BudgetEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final l = _app.ledger;
+    final l = _app.view;
     final suggestion = suggestedBudget(l, categoryId: _categoryId, today: _app.clock());
     final scopeLabel = _categoryId == null ? '每月總預算（所有支出）' : categoryLabel(l, _categoryId);
     return AlertDialog(
@@ -530,7 +530,7 @@ class _BudgetEditorState extends State<_BudgetEditor> {
 /// This month's budget at a glance, for the top of other screens. Null
 /// when there are no budgets.
 Widget? budgetSummary(BuildContext context, AppState app) {
-  final statuses = budgetStatuses(app.ledger, _thisMonth(app), today: app.clock());
+  final statuses = budgetStatuses(app.view, _thisMonth(app), today: app.clock());
   if (statuses.isEmpty) return null;
   void open() => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetsScreen(app: app)));
   final total = statuses.where((s) => s.category == null).firstOrNull;

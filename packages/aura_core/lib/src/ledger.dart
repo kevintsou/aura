@@ -16,6 +16,7 @@ class TxnFilter {
     this.projectIds,
     this.keyword,
     this.searchInvoiceItems = true,
+    this.excludeAccountIds,
   });
 
   final DateTime? from;
@@ -34,6 +35,22 @@ class TxnFilter {
 
   /// Whether [keyword] also matches invoice line item names.
   final bool searchInvoiceItems;
+
+  /// Leaves out records touching any of these accounts (either side of a
+  /// transfer): how hidden accounts stay hidden.
+  final Set<String>? excludeAccountIds;
+
+  TxnFilter excluding(Set<String> accountIds) => TxnFilter(
+    from: from,
+    to: to,
+    kinds: kinds,
+    accountIds: accountIds.isEmpty ? this.accountIds : this.accountIds?.difference(accountIds),
+    categoryIds: categoryIds,
+    projectIds: projectIds,
+    keyword: keyword,
+    searchInvoiceItems: searchInvoiceItems,
+    excludeAccountIds: accountIds.isEmpty ? excludeAccountIds : {...?excludeAccountIds, ...accountIds},
+  );
 }
 
 /// Read access to a ledger.
@@ -89,6 +106,7 @@ abstract interface class LedgerStore implements LedgerReader {
     AccountType? type,
     String? currency,
     bool? archived,
+    bool? hidden,
   });
 
   void addAccount(Account account);
@@ -204,6 +222,7 @@ class InMemoryLedger implements LedgerStore {
     AccountType? type,
     String? currency,
     bool? archived,
+    bool? hidden,
   }) {
     final account = _accounts[accountId];
     if (account == null) throw ArgumentError.value(accountId, 'accountId');
@@ -213,6 +232,7 @@ class InMemoryLedger implements LedgerStore {
       type: type,
       currency: currency,
       archived: archived,
+      hidden: hidden,
     );
   }
 
@@ -407,6 +427,10 @@ class InMemoryLedger implements LedgerStore {
       if (filter.accountIds != null &&
           !filter.accountIds!.contains(t.accountId) &&
           !filter.accountIds!.contains(t.toAccountId)) {
+        return false;
+      }
+      if (filter.excludeAccountIds case final ex?
+          when ex.contains(t.accountId) || ex.contains(t.toAccountId)) {
         return false;
       }
       if (filter.categoryIds != null) {

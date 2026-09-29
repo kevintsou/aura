@@ -47,10 +47,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Period _initialPeriod() {
     final now = _app.clock();
     final thisMonth = Period.month(now.year, now.month);
-    if (_app.ledger.count(TxnFilter(from: thisMonth.from, to: thisMonth.to)) > 0) {
+    if (_app.view.count(TxnFilter(from: thisMonth.from, to: thisMonth.to)) > 0) {
       return thisMonth;
     }
-    final latest = latestRecordMonth(_app.ledger);
+    final latest = latestRecordMonth(_app.view);
     return latest == null ? thisMonth : Period.month(latest.year, latest.month);
   }
 
@@ -59,7 +59,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final d = _data;
     if (d == null || _revision != _app.revision || d.period != period || d.kind != _kind) {
       _revision = _app.revision;
-      _data = _ReportData(_app.ledger, period, _kind);
+      _data = _ReportData(_app.view, period, _kind);
     }
     return _data!;
   }

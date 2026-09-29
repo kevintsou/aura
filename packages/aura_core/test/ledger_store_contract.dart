@@ -78,6 +78,33 @@ void ledgerStoreContract(LedgerStore Function() create) {
     });
   });
 
+  test('hidden accounts and their records can be left out', () {
+    l
+      ..addTxn(expense('t1'))
+      ..addTxn(expense('t2', accountId: bank.id))
+      ..addTxn(
+        Txn(
+          id: 't3',
+          kind: TxnKind.transfer,
+          date: DateTime(2026, 9, 2),
+          accountId: cash.id,
+          toAccountId: bank.id,
+          amount: Decimal.one,
+          baseAmount: Decimal.one,
+        ),
+      )
+      ..updateAccount(bank.id, hidden: true);
+    expect(l.account(bank.id)!.hidden, isTrue);
+    expect(l.account(cash.id)!.hidden, isFalse);
+    final visible = const TxnFilter().excluding({bank.id});
+    expect([for (final t in l.transactions(visible)) t.id], ['t1']);
+    expect(l.count(visible), 1);
+    expect(l.count(TxnFilter(accountIds: {cash.id, bank.id}).excluding({bank.id})), 1);
+    expect(l.count(), 3);
+    l.updateAccount(bank.id, hidden: false);
+    expect(l.account(bank.id)!.hidden, isFalse);
+  });
+
   group('categories', () {
     test('new ones go after their siblings', () {
       l.addCategory(Category(id: 'dinner', kind: TxnKind.expense, name: '晚餐', parentId: 'food'));

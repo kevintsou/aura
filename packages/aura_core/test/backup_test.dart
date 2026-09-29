@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 Object? _snapshot(LedgerReader l) => [
   [
     for (final a in l.accounts)
-      [a.id, a.name, a.type, a.currency, a.archived, a.anchor?.amount, a.anchor?.date],
+      [a.id, a.name, a.type, a.currency, a.archived, a.hidden, a.anchor?.amount, a.anchor?.date],
   ],
   [for (final c in l.categories) [c.id, c.kind, c.name, c.parentId]],
   [for (final p in l.projects) [p.id, p.name]],
@@ -48,6 +48,7 @@ void main() {
         BalanceAnchor(amount: Decimal.parse('-1234.56'), date: DateTime(2026, 9, 29)),
       )
       ..updateAccount(ledger.accounts.first.id, archived: true)
+      ..updateAccount(ledger.accounts.last.id, hidden: true)
       ..addProject(const Project(id: 'p-new', name: '新專案'))
       ..setBudget(Budget(id: 'b-total', amount: Decimal.parse('30000')))
       ..setBudget(

@@ -28,7 +28,7 @@ class CategoryReportScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: app,
     builder: (context, _) {
-      final l = app.ledger;
+      final l = app.view;
       final subs = main == null ? const <CategoryTotal>[] : byCategory(l, period, kind, parentId: main!.id);
       final txns = [
         for (final t in l.transactions(

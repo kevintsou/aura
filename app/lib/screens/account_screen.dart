@@ -245,6 +245,14 @@ class _AccountScreenState extends State<AccountScreen> {
               padding: const EdgeInsets.only(top: 8),
               child: Text('已封存：記帳時不會出現在帳戶選單。', style: theme.textTheme.bodySmall),
             ),
+          SwitchListTile(
+            key: const Key('accountHidden'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('隱藏這個帳戶'),
+            subtitle: const Text('帳戶和它的紀錄不會出現在紀錄、報表、預算和 AI 助理；在「帳戶」可以暫時顯示'),
+            value: a.hidden,
+            onChanged: (v) => setState(() => _app.updateAccount(widget.accountId, hidden: v)),
+          ),
           if (_currency != null && _currency != a.currency)
             Padding(
               padding: const EdgeInsets.only(top: 8),

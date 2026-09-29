@@ -113,6 +113,10 @@ const migrations = <String>[
   ALTER TABLE txns ADD COLUMN recurring_id TEXT;
   CREATE INDEX txns_by_recurring ON txns (recurring_id);
   ''',
+  // 6: hidden (private) accounts.
+  '''
+  ALTER TABLE accounts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

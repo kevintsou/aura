@@ -21,7 +21,7 @@ class RecurringScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: app,
     builder: (context, _) {
-      final l = app.ledger;
+      final l = app.view;
       final items = [...l.recurrings]
         // Upcoming first, soonest on top; finished ones last.
         ..sort((a, b) => switch ((a.next, b.next)) {

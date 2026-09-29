@@ -30,7 +30,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     if (_revision == widget.app.revision) return;
     _revision = widget.app.revision;
     _pages.clear();
-    final ledger = widget.app.ledger;
+    final ledger = widget.app.view;
     _count = ledger.count();
     _review = ledger
         .transactions(const TxnFilter(kinds: {TxnKind.transfer}))
@@ -42,7 +42,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final page = index ~/ _pageSize;
     final rows = _pages.putIfAbsent(
       page,
-      () => widget.app.ledger.transactions(
+      () => widget.app.view.transactions(
         const TxnFilter(),
         page * _pageSize,
         _pageSize,

@@ -7,6 +7,7 @@ import 'cloud/google_drive.dart';
 import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
+import 'services/visible_ledger.dart';
 import 'services/snapshot_store.dart';
 
 typedef AiClientFactory =
@@ -91,7 +92,12 @@ class AppState extends ChangeNotifier {
        _cloudTargets = cloudTargets,
        files = files ?? DeviceBackupFiles(),
        snapshots = snapshots ?? MemorySnapshotStore(),
-       clock = clock ?? DateTime.now;
+       clock = clock ?? DateTime.now {
+    // Hidden accounts go back into hiding whenever the app locks.
+    this.lock.addListener(() {
+      if (this.lock.locked && revealHidden) setRevealHidden(false);
+    });
+  }
 
   /// Persistent on devices (SQLite), in memory on the web and in tests.
   final LedgerStore ledger;
@@ -171,6 +177,7 @@ class AppState extends ChangeNotifier {
     AccountType? type,
     String? currency,
     bool? archived,
+    bool? hidden,
   }) {
     ledger.updateAccount(
       accountId,
@@ -178,6 +185,7 @@ class AppState extends ChangeNotifier {
       type: type,
       currency: currency,
       archived: archived,
+      hidden: hidden,
     );
     revision++;
     notifyListeners();
@@ -199,8 +207,35 @@ class AppState extends ChangeNotifier {
   }
 
   /// Accounts that can take new records.
-  List<Account> get activeAccounts =>
-      [for (final a in ledger.accounts) if (!a.archived) a];
+  List<Account> get activeAccounts => [
+    for (final a in view.accounts)
+      if (!a.archived) a,
+  ];
+
+  /// Whether hidden accounts are showing (until the app locks again).
+  bool revealHidden = false;
+
+  /// Ids of hidden accounts while they are hidden.
+  Set<String> get hiddenAccountIds => revealHidden
+      ? const {}
+      : {
+          for (final a in ledger.accounts)
+            if (a.hidden) a.id,
+        };
+
+  /// What screens, reports, budgets and the AI see: the ledger without
+  /// hidden accounts and their records, unless they are revealed.
+  LedgerReader get view {
+    final hidden = hiddenAccountIds;
+    return hidden.isEmpty ? ledger : VisibleLedger(ledger, hidden);
+  }
+
+  void setRevealHidden(bool reveal) {
+    revealHidden = reveal;
+    revision++;
+    assistant.reset();
+    notifyListeners();
+  }
 
   String? get lastAccountId => ledger.meta('ui.lastAccount');
   String? lastCategoryId(TxnKind kind) =>
@@ -398,6 +433,7 @@ class AppState extends ChangeNotifier {
         a.id,
         type: old.type,
         currency: old.currency == unknownCurrency ? null : old.currency,
+        hidden: old.hidden,
       );
     }
   }
@@ -555,7 +591,7 @@ class AppState extends ChangeNotifier {
     final tools = aiConfig.enableTools
         ? ToolRegistry(
             ledgerTools(
-              ledger,
+              view,
               shareInvoiceItems: aiConfig.shareInvoiceItems,
               clock: clock,
             ),

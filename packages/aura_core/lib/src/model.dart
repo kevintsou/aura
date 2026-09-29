@@ -19,6 +19,7 @@ class Account {
     required this.currency,
     this.anchor,
     this.archived = false,
+    this.hidden = false,
   });
 
   final String id;
@@ -37,6 +38,10 @@ class Account {
   /// Hidden from pickers for new records; its history stays.
   final bool archived;
 
+  /// Kept private: it and its records stay out of lists, reports, budgets
+  /// and the AI until the user reveals hidden accounts.
+  final bool hidden;
+
   Account withAnchor(BalanceAnchor? anchor) => Account(
     id: id,
     name: name,
@@ -44,6 +49,7 @@ class Account {
     currency: currency,
     anchor: anchor,
     archived: archived,
+    hidden: hidden,
   );
 
   Account copyWith({
@@ -51,6 +57,7 @@ class Account {
     AccountType? type,
     String? currency,
     bool? archived,
+    bool? hidden,
   }) => Account(
     id: id,
     name: name ?? this.name,
@@ -58,6 +65,7 @@ class Account {
     currency: currency ?? this.currency,
     anchor: anchor,
     archived: archived ?? this.archived,
+    hidden: hidden ?? this.hidden,
   );
 }
 

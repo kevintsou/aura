@@ -336,7 +336,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   }) {
     final accounts = [
       for (final a in _ledger.accounts)
-        if (!a.archived || a.id == value) a,
+        if ((!a.archived && !_app.hiddenAccountIds.contains(a.id)) || a.id == value) a,
     ];
     return DropdownButtonFormField<String>(
       key: key,

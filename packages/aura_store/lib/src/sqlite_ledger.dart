@@ -46,6 +46,7 @@ class SqliteLedger implements LedgerStore {
           type: AccountType.values.byName(r['type'] as String),
           currency: r['currency'] as String,
           archived: (r['archived'] as int) != 0,
+          hidden: (r['hidden'] as int) != 0,
           anchor: r['anchor_amount'] == null
               ? null
               : BalanceAnchor(
@@ -175,6 +176,7 @@ class SqliteLedger implements LedgerStore {
     AccountType? type,
     String? currency,
     bool? archived,
+    bool? hidden,
   }) {
     if (!_accounts.containsKey(accountId)) {
       throw ArgumentError.value(accountId, 'accountId');
@@ -182,9 +184,16 @@ class SqliteLedger implements LedgerStore {
     checkAccountDetails(this, name: name, currency: currency, id: accountId);
     _db.execute(
       'UPDATE accounts SET name = coalesce(?, name), type = coalesce(?, type), '
-      'currency = coalesce(?, currency), archived = coalesce(?, archived) '
+      'currency = coalesce(?, currency), archived = coalesce(?, archived), hidden = coalesce(?, hidden) '
       'WHERE id = ?',
-      [name, type?.name, currency, archived == null ? null : (archived ? 1 : 0), accountId],
+      [
+        name,
+        type?.name,
+        currency,
+        archived == null ? null : (archived ? 1 : 0),
+        hidden == null ? null : (hidden ? 1 : 0),
+        accountId,
+      ],
     );
     _loadReferenceData();
   }
@@ -261,6 +270,13 @@ class SqliteLedger implements LedgerStore {
       final ids = f.accountIds!.toList();
       clauses.add(
         '(account_id IN (${marks(ids)}) OR to_account_id IN (${marks(ids)}))',
+      );
+    }
+    if (f.excludeAccountIds case final ex? when ex.isNotEmpty) {
+      final ids = ex.toList();
+      clauses.add(
+        '(account_id IS NULL OR account_id NOT IN (${marks(ids)})) AND '
+        '(to_account_id IS NULL OR to_account_id NOT IN (${marks(ids)}))',
       );
     }
     if (f.categoryIds != null) {
@@ -657,7 +673,7 @@ String formatIsoDate(DateTime d) =>
 
 const _insertAccount =
     'INSERT INTO accounts (id, name, type, currency, sort, anchor_amount, '
-    'anchor_date, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+    'anchor_date, archived, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
 List<Object?> _accountArgs(Account a, int sort) => [
   a.id,
@@ -668,6 +684,7 @@ List<Object?> _accountArgs(Account a, int sort) => [
   a.anchor?.amount.toString(),
   a.anchor == null ? null : formatIsoDate(a.anchor!.date),
   a.archived ? 1 : 0,
+  a.hidden ? 1 : 0,
 ];
 
 const _insertCategory =

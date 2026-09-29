@@ -330,6 +330,7 @@ Map<String, Object?> _accountToJson(Account a) => {
   'type': a.type.name,
   'currency': a.currency,
   if (a.archived) 'archived': true,
+  if (a.hidden) 'hidden': true,
   if (a.anchor != null)
     'anchor': {'amount': a.anchor!.amount.toString(), 'date': _date(a.anchor!.date)},
 };
@@ -342,6 +343,7 @@ Account _accountFromJson(Map<String, Object?> j) {
     type: AccountType.values.byName(j['type'] as String),
     currency: j['currency'] as String,
     archived: j['archived'] as bool? ?? false,
+    hidden: j['hidden'] as bool? ?? false,
     anchor: anchor == null
         ? null
         : BalanceAnchor(

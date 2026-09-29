@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../lock/lock_settings_screen.dart';
 import 'account_fields.dart';
 import 'account_screen.dart';
 import 'new_account_screen.dart';
@@ -17,14 +18,29 @@ class AccountsScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: app,
     builder: (context, _) {
-      final balances = app.balances.values.toList();
+      final hiddenIds = app.hiddenAccountIds;
+      final all = app.balances.values.toList();
+      final balances = [for (final b in all) if (!hiddenIds.contains(b.account.id)) b];
+      final hasHidden = all.any((b) => b.account.hidden);
       final unset = balances.where((b) => !b.isSet).length;
       final unknown = balances
           .where((b) => b.account.currency == unknownCurrency)
           .length;
-      final archived = balances.where((b) => b.account.archived).toList();
+      final archived = balances.where((b) => b.account.archived && !b.account.hidden).toList();
+      final hidden = balances.where((b) => b.account.hidden).toList();
       return Scaffold(
-        appBar: AppBar(title: const Text('帳戶')),
+        appBar: AppBar(
+          title: const Text('帳戶'),
+          actions: [
+            if (hasHidden)
+              TextButton.icon(
+                key: const Key('toggleHidden'),
+                onPressed: () => _toggleHidden(context),
+                icon: Icon(app.revealHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                label: Text(app.revealHidden ? '隱藏' : '顯示隱藏的帳戶'),
+              ),
+          ],
+        ),
         floatingActionButton: FloatingActionButton.extended(
           heroTag: null, // several screens have one; skip the hero animation
           key: const Key('addAccount'),
@@ -54,15 +70,34 @@ class AccountsScreen extends StatelessWidget {
                     ..._section(
                       context,
                       accountTypeLabels[type]!,
-                      [for (final b in balances) if (!b.account.archived && b.account.type == type) b],
+                      [
+                        for (final b in balances)
+                          if (!b.account.archived && !b.account.hidden && b.account.type == type) b,
+                      ],
                     ),
                   ..._section(context, '已封存', archived),
+                  ..._section(context, '隱藏的帳戶', hidden),
                   const SizedBox(height: 80), // room for the button
                 ],
               ),
       );
     },
   );
+
+  /// Revealing needs the PIN when the app lock is on.
+  Future<void> _toggleHidden(BuildContext context) async {
+    if (app.revealHidden) return app.setRevealHidden(false);
+    if (app.lock.enabled) {
+      final ok = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PinCheckScreen(lock: app.lock, title: '顯示隱藏的帳戶', check: app.lock.check),
+        ),
+      );
+      if (ok != true) return;
+    }
+    app.setRevealHidden(true);
+  }
 
   List<Widget> _section(
     BuildContext context,
