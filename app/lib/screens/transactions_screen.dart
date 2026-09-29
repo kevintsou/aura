@@ -5,33 +5,73 @@ import '../app_state.dart';
 import '../format.dart';
 import 'import_action.dart';
 
-class TransactionsScreen extends StatelessWidget {
+class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key, required this.app});
 
   final AppState app;
 
   @override
+  State<TransactionsScreen> createState() => _TransactionsScreenState();
+}
+
+class _TransactionsScreenState extends State<TransactionsScreen> {
+  static const _pageSize = 100;
+
+  /// Loaded pages, keyed by page index; dropped when the ledger changes.
+  final _pages = <int, List<Txn>>{};
+  int? _revision;
+  int _count = 0;
+  int _review = 0;
+
+  void _refreshIfChanged() {
+    if (_revision == widget.app.revision) return;
+    _revision = widget.app.revision;
+    _pages.clear();
+    final ledger = widget.app.ledger;
+    _count = ledger.count();
+    _review = ledger
+        .transactions(const TxnFilter(kinds: {TxnKind.transfer}))
+        .where((t) => t.needsReview)
+        .length;
+  }
+
+  Txn _at(int index) {
+    final page = index ~/ _pageSize;
+    final rows = _pages.putIfAbsent(
+      page,
+      () => widget.app.ledger.transactions(
+        const TxnFilter(),
+        page * _pageSize,
+        _pageSize,
+      ),
+    );
+    return rows[index % _pageSize];
+  }
+
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: app,
+    listenable: widget.app,
     builder: (context, _) {
-      final txns = app.ledger.transactions();
-      final review = txns.where((t) => t.needsReview).length;
+      _refreshIfChanged();
+      final banner = _review > 0 ? 1 : 0;
       return Scaffold(
-        appBar: AppBar(title: const Text('紀錄')),
-        body: txns.isEmpty
-            ? _Empty(app: app)
+        appBar: AppBar(
+          title: Text(_count == 0 ? '紀錄' : '紀錄（$_count 筆）'),
+        ),
+        body: _count == 0
+            ? _Empty(app: widget.app)
             : ListView.separated(
-                itemCount: txns.length + (review > 0 ? 1 : 0),
+                itemCount: _count + banner,
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, i) {
-                  if (review > 0 && i == 0) {
+                  if (banner == 1 && i == 0) {
                     return MaterialBanner(
-                      content: Text('有 $review 筆轉帳只找到一邊，請確認'),
+                      content: Text('有 $_review 筆轉帳只找到一邊，請確認'),
                       leading: const Icon(Icons.flag_outlined),
                       actions: const [SizedBox.shrink()],
                     );
                   }
-                  return _TxnTile(app: app, txn: txns[i - (review > 0 ? 1 : 0)]);
+                  return _TxnTile(app: widget.app, txn: _at(i - banner));
                 },
               ),
       );

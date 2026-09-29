@@ -6,10 +6,14 @@ import 'screens/assistant_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'services/ai_settings_store.dart';
+import 'services/ledger_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final app = AppState(settings: DeviceAiSettingsStore());
+  final app = AppState(
+    ledger: await openLedgerStore(),
+    settings: DeviceAiSettingsStore(),
+  );
   await app.load();
   runApp(AuraApp(app: app));
 }

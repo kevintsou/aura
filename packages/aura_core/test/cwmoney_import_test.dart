@@ -159,6 +159,38 @@ void main() {
       expect(txns, hasLength(2));
     });
 
+    test('pages and counts', () {
+      final all = ledger.transactions();
+      expect(ledger.count(), all.length);
+      expect(
+        ledger.transactions(const TxnFilter(), 3, 4).map((t) => t.id),
+        all.skip(3).take(4).map((t) => t.id),
+      );
+      expect(ledger.transactions(const TxnFilter(), 100), isEmpty);
+    });
+
+    test('orders by creation time, missing last, ties by insertion', () {
+      Txn t(String id, DateTime? created) => Txn(
+        id: id,
+        kind: TxnKind.expense,
+        date: DateTime(2026, 1, 1),
+        accountId: 'a',
+        amount: Decimal.one,
+        baseAmount: Decimal.one,
+        createdAt: created,
+      );
+      final noon = DateTime(2026, 1, 1, 12);
+      final l = InMemoryLedger(
+        transactions: [
+          t('none', null),
+          t('tie1', noon),
+          t('late', DateTime(2026, 1, 1, 18)),
+          t('tie2', noon),
+        ],
+      );
+      expect(l.transactions().map((t) => t.id), ['late', 'tie1', 'tie2', 'none']);
+    });
+
     test('filters by inclusive date range and returns newest first', () {
       final txns = ledger.transactions(
         TxnFilter(from: DateTime(2026, 9, 22), to: DateTime(2026, 9, 24)),

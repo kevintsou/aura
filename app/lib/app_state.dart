@@ -10,22 +10,29 @@ typedef AiClientFactory =
 AiClient _defaultClient(AiEndpointConfig config, String? apiKey) =>
     OpenAiCompatibleClient(config: config, apiKey: apiKey);
 
+const _metaImportFile = 'import.fileName';
+const _metaImportedAt = 'import.at';
+
 /// App-wide state: the ledger, the AI connection and the assistant
 /// conversation. Plain ChangeNotifier until the app outgrows it.
 class AppState extends ChangeNotifier {
   AppState({
+    required this.ledger,
     required this.settings,
     this.clientFactory = _defaultClient,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
 
+  /// Persistent on devices (SQLite), in memory on the web and in tests.
+  final LedgerStore ledger;
   final AiSettingsStore settings;
   final AiClientFactory clientFactory;
   final DateTime Function() clock;
 
-  LedgerReader ledger = InMemoryLedger();
+  /// Bumped whenever ledger data changes, so views can drop caches.
+  int revision = 0;
   CwmImportReport? lastImport;
-  String? importedFileName;
+  String? get importedFileName => ledger.meta(_metaImportFile);
 
   AiEndpointConfig aiConfig = AiEndpointConfig.defaults;
   String? _apiKey;
@@ -40,16 +47,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Returns an error message, or null on success.
-  String? importCwmoney(List<int> bytes, String fileName) {
+  /// Replaces the ledger with a CWMoney export. Parsing runs off the UI
+  /// isolate. Returns an error message, or null on success.
+  Future<String?> importCwmoney(List<int> bytes, String fileName) async {
+    final CwmImportResult result;
     try {
-      final result = importCwmoneyCsv(bytes);
-      ledger = result.ledger;
-      lastImport = result.report;
-      importedFileName = fileName;
+      result = await compute(importCwmoneyCsv, bytes);
     } on CwmFormatException catch (e) {
       return e.message;
     }
+    try {
+      ledger.replaceAll(result.ledger);
+    } on Exception catch (e) {
+      return '寫入資料庫失敗：$e';
+    }
+    ledger
+      ..setMeta(_metaImportFile, fileName)
+      ..setMeta(_metaImportedAt, clock().toIso8601String());
+    lastImport = result.report;
+    revision++;
     assistant.reset();
     notifyListeners();
     return null;

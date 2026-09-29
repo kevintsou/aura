@@ -1,11 +1,11 @@
 # Aura 記帳
 
-開源、免費的手機記帳 App：
+免費的手機記帳 App：
 
 - **相容 CWMoney**：直接匯入 CWMoney 經典版匯出的 CSV。
 - **AI 自己接**：用自己的 OpenAI API 金鑰，或任何 OpenAI 相容服務、本機模型、自己寫的 Agent，用自然語言分析自己的收支。
 
-沒有帳號、沒有廣告，也沒有 Aura 伺服器。資料留在手機上，AI 要查什麼，由手機在本機算好再交給你選的 AI。
+沒有帳號、沒有廣告，也沒有 Aura 伺服器。資料存在手機的 SQLite 資料庫裡；AI 要查什麼，由手機在本機算好再交給你選的 AI。
 
 | AI 連線設定 | AI 助理（可以看到送出了什麼） | 紀錄 |
 |---|---|---|
@@ -21,6 +21,7 @@ app/                    Flutter App（iOS / Android / Web）
 packages/
   aura_core/            資料模型、帳本查詢、CWMoney 匯入（純 Dart）
   aura_ai/              AI 連線（OpenAI 相容）、帳本工具、Agent 迴圈（純 Dart）
+  aura_store/           SQLite 儲存與 schema migration
 examples/mock_agent.py  最小的自訂 Agent 範例（只用 Python 標準函式庫）
 tool/                   開發工具（Big5-HKSCS 對照表產生器）
 docs/
@@ -31,12 +32,13 @@ docs/
 
 ## 開發
 
-需要 Flutter 3.47 以上（Dart 3.9 以上）。
+需要 Flutter 3.47 以上（Dart 3.10 以上）。第一次 build 時，`sqlite3` 套件會透過 build hook 自動準備 SQLite 的 native library。
 
 ```bash
 # 核心套件
 (cd packages/aura_core && dart pub get && dart test)
 (cd packages/aura_ai && dart pub get && dart test)
+(cd packages/aura_store && dart pub get && dart test)
 
 # App
 cd app
@@ -58,6 +60,7 @@ python3 examples/mock_agent.py 8766
 
 ## 隱私
 
+- 帳本存在 App 私有目錄的 `aura.db`（SQLite），不會上傳。網頁版只把資料放在記憶體裡，不會保存。
 - API 金鑰只存在手機的 Keychain／Keystore。
 - 送給 AI 的只有你的問題，以及工具查詢的結果。手機條碼載具號碼和賣方統編一律不送；卡號、帳號這類長串數字會遮蔽。
 - 每一次查詢送出的內容，都可以在對話裡點開檢查。

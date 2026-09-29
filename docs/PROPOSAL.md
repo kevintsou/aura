@@ -1,6 +1,6 @@
 # Aura 記帳 App — 專案提案 (Proposal)
 
-> 狀態：v0.3 · 2026-09-29（v0.3：**完全免費、開放**；AI 改成使用者自備 API，BYOK；預設 OpenAI GPT API，會送發票品項明細。第一版實作已經在 repo 裡）
+> 狀態：v0.4 · 2026-09-29（v0.4：**免費但不開源**；資料存到手機的 SQLite；預設模型 `gpt-6-sol`；CWMoney 以 CSV 匯入為主，備份檔改成選用。v0.3：AI 改成使用者自備 API，BYOK）
 > 目標：開發一款手機記帳 App，**功能上涵蓋 CWMoney**，並且**能讀寫 CWMoney 的備份檔與匯出檔**，讓 CWMoney 使用者可以無痛搬家，必要時也能搬回去。另外提供 **AI 消費分析**：使用者**接上自己的 AI**，可以是 OpenAI API 金鑰、任何 OpenAI 相容服務，或自己的 Agent。
 
 ---
@@ -38,7 +38,7 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 - 欄位用 `i_` 當前綴，已知有 `i_item`、`i_create`、`i_photo`、`i_invoice`、`i_gps`、`i_rev1`、`i_rev2`。其中 `rev` 看起來是保留欄位。
 - 其他資料表（帳戶、分類、專案、週期、預算）的名稱和欄位**網路上找不到公開資料**。
 
-> ⚠️ **關鍵風險**：完整的 schema 沒有公開。要做到「完全相容」，需要拿**真實的備份檔樣本**（最好經典版＋新版、Android＋iOS 都有，而且涵蓋轉帳、外幣、信用卡、週期、專案、照片、發票等情境）來逆向分析。這是第 0 階段要處理的事（見第 8 節）。
+> **搬家以 CSV 為主。** CSV 格式已經用真實樣本完整驗證，匯入也已經實作。備份檔（`.sdb`／`.idb`）的 schema 沒有公開，**不是必要的**，只有在想補齊 CSV 缺少的資訊時才需要：期初餘額、帳戶類型、預算、週期收支、照片、單邊轉帳的對象。另外，要做出 CWMoney 能還原的檔案，也需要備份檔的格式。這些都列為選用（P2）。
 
 ---
 
@@ -78,9 +78,11 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 ### 3.4 資料與相容性（Aura 的核心差異）
 | 功能 | Aura 優先級 |
 |---|---|
-| **匯入** CWMoney `.sdb`／`.idb` 備份 | **P0** |
-| **匯出** CWMoney 可以還原的 `.idb` 備份 | **P1**（要先確認 schema 的版本差異） |
-| 匯入／匯出 CWMoney 格式的 CSV（格式已經驗證，**M1 優先做**） | P0 |
+| **匯入** CWMoney 經典版 CSV（兩代格式） | ✅ P0（新版 CSV 已完成；舊版 HTML 格式待做） |
+| 期初餘額、帳戶類型的補填（CSV 沒有這些資訊，匯入後讓使用者設定） | P1 |
+| 匯出 CWMoney 格式的 CSV（讓習慣用 Excel 分析的人繼續用） | P1 |
+| 匯入／匯出 CWMoney `.sdb`／`.idb` 備份（要有樣本才能做） | P2（選用） |
+| **資料存在手機上**（SQLite，有 schema migration） | ✅ P0 |
 | Aura 自己的完整備份（加密 zip：SQLite＋照片） | P0 |
 | 自選雲端備份（iCloud Drive、Google Drive、Dropbox） | P1 |
 | 多裝置同步、共享帳本 | P2 |
@@ -114,12 +116,12 @@ CWMoney（理財筆記）是台灣最老牌的記帳 App 之一，最早由 Lib 
 | 層 | 選擇 | 理由 |
 |---|---|---|
 | App 框架 | **Flutter (Dart)** | 一套程式碼同時做 iOS 和 Android；UI 一致；畫圖表的生態成熟（`fl_chart`） |
-| 本機資料庫 | **SQLite**，用 `drift` 存取 | CWMoney 本身就是 SQLite，匯入時可以直接 `ATTACH` 備份檔用 SQL 轉換；drift 有型別安全和 migration |
+| 本機資料庫 | ✅ **SQLite**，用 `sqlite3` 套件（FFI）直接存取，程式在 `packages/aura_store` | 不需要程式碼產生器；同步 API 可以直接實作 `LedgerReader`；金額存成 decimal 字串，不會有浮點誤差；用 `PRAGMA user_version` 做 migration。網頁版沒有 FFI，改用記憶體（網頁版只是開發用） |
 | 金額 | 用**整數的最小單位**（minor units）或 Decimal 字串存 | 避免浮點數誤差；匯入 CWMoney 的 REAL 欄位時要明確做捨入 |
 | 狀態管理 | Riverpod | 好測試、社群主流 |
 | 同步（P2） | 以 CRDT／變更日誌為基礎，後端再評估（Supabase 或自建） | 本地優先，同步是加值功能 |
-| **AI 連線** | **沒有後端**。手機直接呼叫使用者設定的端點，協定是 OpenAI Chat Completions＋tools | 免費、開放；使用者自己控制資料和費用；一個協定就能接上 OpenAI、OpenRouter、本機模型和自訂 Agent |
-| **預設 LLM** | OpenAI GPT API（預設模型 `gpt-5-mini`，使用者可以自己改，或從 `/models` 選） | 使用者指定 |
+| **AI 連線** | **沒有後端**。手機直接呼叫使用者設定的端點，協定是 OpenAI Chat Completions＋tools | 免費；使用者自己控制資料和費用；一個協定就能接上 OpenAI、OpenRouter、本機模型和自訂 Agent |
+| **預設 LLM** | OpenAI GPT API（預設模型 `gpt-6-sol`，使用者可以自己改，或從 `/models` 選） | 使用者指定 |
 | **金鑰保存** | `flutter_secure_storage`（iOS Keychain、Android Keystore），每個服務各存一把 | 金鑰不離開手機 |
 
 > 替代方案：React Native (Expo) 加 `expo-sqlite`。如果團隊比較熟 TypeScript 可以選這個，4.2 節的相容層設計不受影響。
@@ -214,12 +216,13 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 
 ---
 
-## 6. 開放與免費
+## 6. 免費（不開源）
 
 - **App 完全免費**：沒有付費功能、沒有廣告、沒有帳號系統，也沒有 Aura 伺服器。
+- **原始碼不開源**：repo 保持私有，版權所有。
 - **AI 自備（BYOK）**：使用者用自己的 OpenAI API 金鑰（或任何相容服務、本機模型、自己的 Agent），費用直接付給那個服務。
 - **資料匯入匯出永遠可用**，包括 CWMoney 格式。
-- **開放**：Agent API 規格公開（[`ai-agent-api.md`](ai-agent-api.md)），也附上範例 Agent（`examples/mock_agent.py`）。原始碼授權待定（見第 10 節）。
+- **Agent API 規格公開**：寫在 [`ai-agent-api.md`](ai-agent-api.md)，也附上範例 Agent（`examples/mock_agent.py`），讓使用者可以接自己的 Agent。規格公開和原始碼開源是兩回事。
 
 ---
 
@@ -231,7 +234,7 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 - **隱私**：樣本檔要先去識別化（`scripts/anonymize_cwm.py`）才能放進 repo；真實樣本只在本機測試，**不 commit**。
 - **CSV 匯入的驗收標準**：用真實樣本（17,158 筆）測試。解析成功率 100%；轉帳配對率 ≥ 97%，剩下的標記為 `needs_review`；依帳戶加總的「小計」要和 CWMoney 完全一致。
 - **AI 評測集**：準備一組問題和標準答案（例如「2025 年外食總額」），每次換模型或改 prompt 都要跑，比較正確率和 token 用量。
-- **目前的測試**：`aura_core` 17 個、`aura_ai` 19 個、App widget 6 個。另外，匯入器已經用使用者的真實樣本（17,158 筆）在本機驗證過：解碼結果和 Python 參考實作逐字相同，收支加總完全一致。
+- **目前的測試**：`aura_core` 19 個、`aura_ai` 19 個、`aura_store` 21 個、App 8 個。另外，已經用使用者的真實樣本（17,158 列）在本機驗證過：解碼結果和 Python 參考實作逐字相同、收支加總完全一致；SQLite 往返 14,894 筆交易，0 筆不一致。
 
 ---
 
@@ -239,10 +242,10 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 
 | 階段 | 內容 | 產出 | 預估 |
 |---|---|---|---|
-| **M0 格式研究** | ✅ CSV 已完成；🔲 `.sdb`／`.idb` 還在等樣本 | `docs/cwmoney-format.md`、`inspect` CLI 工具 | 1–2 週 |
-| **M1 骨架＋匯入** | Flutter 專案、Aura schema、**CWMoney CSV 匯入（兩代格式）**、帳戶與紀錄列表；拿到樣本後再加 `.sdb`／`.idb` 匯入 | 可以安裝的內測版，能匯入並瀏覽 CWMoney 的資料 | 3 週 |
+| **M0 格式研究** | ✅ CSV 已完成（`.sdb`／`.idb` 改成選用） | `docs/cwmoney-format.md` | 完成 |
+| **M1 骨架＋匯入** | ✅ Flutter 專案、資料模型、CWMoney CSV 匯入（新版格式）、紀錄列表（分頁）、**SQLite 儲存**；🔲 舊版 HTML 格式、期初餘額補填 | 可以安裝的內測版，能匯入並瀏覽 CWMoney 的資料 | 剩約 1 週 |
 | **M2 記帳 MVP** | 記一筆、編輯、刪除；轉帳、專案、多幣別；基本報表；Aura 自己的備份 | Alpha | 4 週 |
-| **M3 V1** | 週期收支、預算、進階報表、照片、App 鎖、隱藏帳戶、雲端硬碟備份、**匯出 CWMoney `.idb`** | Beta → 上架 | 5 週 |
+| **M3 V1** | 週期收支、預算、進階報表、照片、App 鎖、隱藏帳戶、雲端硬碟備份、匯出 CWMoney 格式的 CSV | Beta → 上架 | 5 週 |
 | **M5 AI** | ✅ BYOK 連線設定、OpenAI 相容 client、本機帳本工具、Agent 迴圈、對話 UI（**第一版已完成**）；🔲 月報洞察、固定支出偵測、發票自動分類、回答附圖表、串流輸出、AI 評測集 | AI 助理 | 剩下的部分約 3 週 |
 | **M4 V2** | 發票載具同步與對獎、GPS、多裝置同步、共享帳本、桌面小工具、AI 預算模擬 | 2.x | 之後再排 |
 
@@ -265,13 +268,13 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 
 ## 10. 需要你決定或提供的事
 
-1. **樣本檔**（最重要）：CSV 匯出已經分析完成（見 [`cwmoney-format.md`](cwmoney-format.md)）。還需要一份或多份 CWMoney 備份檔（`.idb`／`.sdb`），最好跟 CSV 是同一個時間點的。內容最好涵蓋轉帳、外幣、信用卡、專案、週期、預算、照片和發票紀錄。如果有隱私上的顧慮，可以另外開一個測試帳本來產生。
+1. ~~樣本檔~~ → CSV 已經足夠。`.idb`／`.sdb` 備份檔是選用的，只在想補齊期初餘額等資訊時才需要。
 2. **目標版本**：你的樣本是**經典版**（`cwmoney_ex2`）。新版 3.x 也要支援嗎？
 3. **平台**：第一版用 Flutter 實作，iOS、Android 和網頁版都能 build。兩個手機平台都要上架嗎？
 4. **同步和共享帳本**：要列進 V1 嗎？這會決定要不要一開始就做後端。
 5. ~~商業模式~~ → **完全免費、開放，AI 由使用者自備**。
 6. ~~LLM~~ → **OpenAI GPT API**（預設），可以送發票品項明細（有開關）。
-7. **授權**：「完全開放」是指原始碼要開源嗎？建議 **Apache-2.0**（有專利授權條款，對商業使用友善）或 **MIT**（最簡單）。如果不希望別人拿去做封閉的商業版本，可以考慮 **GPL-3.0**。
+7. **授權**：你選了 Apache-2.0，但也說不開源。**這兩件事互相衝突**：Apache-2.0 是開源授權，放上 LICENSE 就等於允許任何人使用、修改、散布，包括商業用途。所以還沒有加 LICENSE，等你確認：(a) 不開源，repo 保持私有、版權所有，App 免費發佈；或 (b) 開源，使用 Apache-2.0。
 8. **App 名稱**：就用 **Aura** 嗎？
 
 ---

@@ -4,13 +4,13 @@ enum AiPreset {
   openAi(
     label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-5-mini',
+    defaultModel: 'gpt-6-sol',
     requiresApiKey: true,
   ),
   openRouter(
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'openai/gpt-5-mini',
+    defaultModel: 'openai/gpt-6-sol',
     requiresApiKey: true,
   ),
   ollama(
@@ -70,7 +70,7 @@ class AiEndpointConfig {
   static const defaults = AiEndpointConfig(
     preset: AiPreset.openAi,
     baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-5-mini',
+    model: 'gpt-6-sol',
   );
 
   final AiPreset preset;

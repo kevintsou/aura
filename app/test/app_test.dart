@@ -4,6 +4,8 @@ import 'package:aura/app_state.dart';
 import 'package:aura/main.dart';
 import 'package:aura/services/ai_settings_store.dart';
 import 'package:aura_ai/aura_ai.dart';
+import 'package:aura_core/aura_core.dart';
+import 'package:aura_store/aura_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,11 +33,13 @@ Future<AppState> _app({
   AiEndpointConfig? config,
   String? key,
   _FakeClient? client,
+  LedgerStore? ledger,
 }) async {
   final store = MemoryAiSettingsStore(config: config ?? AiEndpointConfig.defaults);
   if (key != null) store.keys[(config ?? AiEndpointConfig.defaults).preset] = key;
   final fake = client ?? _FakeClient([const ChatCompletion(message: AssistantMessage(content: 'OK'))]);
   final app = AppState(
+    ledger: ledger ?? InMemoryLedger(),
     settings: store,
     clientFactory: (c, k) {
       fake.configs.add(c);
@@ -129,7 +133,7 @@ void main() {
       const ChatCompletion(message: AssistantMessage(content: '九月支出 NT\$4,010，最多是購物娛樂。')),
     ]);
     final app = await _app(key: 'sk-test', client: client);
-    expect(app.importCwmoney(_sample, 'sample.csv'), isNull);
+    expect(await tester.runAsync(() => app.importCwmoney(_sample, 'sample.csv')), isNull);
     await tester.pumpWidget(AuraApp(app: app));
     await tester.tap(find.text('AI 助理'));
     await tester.pumpAndSettle();
@@ -147,10 +151,37 @@ void main() {
 
   testWidgets('imported records are listed with a review banner', (tester) async {
     final app = await _app();
-    app.importCwmoney(_sample, 'sample.csv');
+    await tester.runAsync(() => app.importCwmoney(_sample, 'sample.csv'));
     await tester.pumpWidget(AuraApp(app: app));
     await tester.pumpAndSettle();
+    expect(find.text('紀錄（11 筆）'), findsOneWidget);
     expect(find.text('有 1 筆轉帳只找到一邊，請確認'), findsOneWidget);
     expect(find.text('生活費 · 早餐'), findsOneWidget);
+  });
+
+  test('an import is saved in SQLite and survives a restart', () async {
+    final dir = Directory.systemTemp.createTempSync('aura_app');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final path = '${dir.path}/aura.db';
+
+    final first = await _app(ledger: SqliteLedger.open(path));
+    expect(await first.importCwmoney(_sample, 'sample.csv'), isNull);
+    first.ledger.close();
+
+    final second = await _app(ledger: SqliteLedger.open(path));
+    addTearDown(second.ledger.close);
+    expect(second.ledger.count(), 11);
+    expect(second.importedFileName, 'sample.csv');
+    expect(second.ledger.transactions(const TxnFilter(keyword: '茶葉蛋')), hasLength(1));
+  });
+
+  test('a rejected file leaves the saved ledger alone', () async {
+    final app = await _app(ledger: SqliteLedger.inMemory());
+    addTearDown(app.ledger.close);
+    await app.importCwmoney(_sample, 'sample.csv');
+    final error = await app.importCwmoney('<!doctype html><table>'.codeUnits, 'old.csv');
+    expect(error, contains('HTML'));
+    expect(app.ledger.count(), 11);
+    expect(app.importedFileName, 'sample.csv');
   });
 }

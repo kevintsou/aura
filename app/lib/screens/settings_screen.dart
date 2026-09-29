@@ -43,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
             applicationName: 'Aura 記帳',
             applicationVersion: '0.1.0',
             aboutBoxChildren: [
-              Text('開源、免費的記帳 App。相容 CWMoney，AI 分析使用你自己的 API。'),
+              Text('免費的記帳 App。相容 CWMoney，AI 分析使用你自己的 API。'),
             ],
           ),
         ],

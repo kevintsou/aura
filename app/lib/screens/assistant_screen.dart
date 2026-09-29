@@ -181,7 +181,7 @@ class _Welcome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = app.ledger.transactions().length;
+    final count = app.ledger.count();
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

@@ -26,6 +26,12 @@ jobs:
           dart pub get
           dart analyze --fatal-infos
           dart test
+      - name: aura_store
+        working-directory: packages/aura_store
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
       - name: app
         working-directory: app
         run: |

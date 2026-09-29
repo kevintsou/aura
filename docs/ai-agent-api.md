@@ -186,7 +186,7 @@ python3 examples/mock_agent.py 8766
 | 服務 | 狀態 |
 |---|---|
 | OpenAI（`https://api.openai.com/v1`） | 預設。需要 API 金鑰 |
-| OpenRouter | 模型名稱要加供應商前綴，例如 `openai/gpt-5-mini` |
+| OpenRouter | 模型名稱要加供應商前綴，例如 `openai/gpt-6-sol` |
 | Ollama | 要選支援 tool calling 的模型，例如 qwen3、llama3.1。手機連電腦時，網址要填電腦的區網 IP |
 | LM Studio | 啟動 local server，模型名稱照 LM Studio 顯示的填 |
 | 不支援 tools 的端點 | 關閉「讓 AI 查詢帳本」。這時 AI 看不到帳本，只能根據對話內容回答 |

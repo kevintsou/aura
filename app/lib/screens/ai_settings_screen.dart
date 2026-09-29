@@ -245,7 +245,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             autocorrect: false,
             decoration: InputDecoration(
               labelText: '模型',
-              hintText: 'gpt-5-mini',
+              hintText: 'gpt-6-sol',
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
                 tooltip: '從服務取得模型清單',
