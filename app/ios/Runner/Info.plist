@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>拍收據或商品的照片附在紀錄上</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>從相簿選照片附在紀錄上</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>用 Face ID 解開 Aura 記帳的 App 鎖</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

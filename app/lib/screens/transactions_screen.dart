@@ -180,6 +180,8 @@ class _TxnTile extends StatelessWidget {
           ? const Icon(Icons.flag_outlined)
           : txn.recurringId != null
           ? Icon(Icons.event_repeat, semanticLabel: '週期收支', color: scheme.onSurfaceVariant)
+          : app.view.photoIds(txn.id).isNotEmpty
+          ? Icon(Icons.photo_outlined, semanticLabel: '有照片', color: scheme.onSurfaceVariant)
           : null,
       title: Text(_title()),
       subtitle: Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),

@@ -50,11 +50,15 @@ class BackupInfo {
     required this.encrypted,
     this.firstDate,
     this.lastDate,
+    this.photos = 0,
   });
 
   final DateTime createdAt;
   final int accounts;
   final int transactions;
+
+  /// 0 for backups made before photos existed.
+  final int photos;
   final bool encrypted;
   final DateTime? firstDate;
   final DateTime? lastDate;
@@ -80,6 +84,7 @@ Future<Uint8List> encodeBackup(
     'createdAt': createdAt.toIso8601String(),
     'accounts': ledger.accounts.length,
     'transactions': txns.length,
+    'photos': ledger.photos().length,
     if (txns.isNotEmpty) 'firstDate': _date(txns.last.date),
     if (txns.isNotEmpty) 'lastDate': _date(txns.first.date),
   };
@@ -104,6 +109,10 @@ Future<Uint8List> encodeBackup(
         },
     ],
     'transactions': [for (final t in txns) _txnToJson(t)],
+    'photos': [
+      for (final p in ledger.photos())
+        {'id': p.id, 'txnId': p.txnId, 'mime': p.mime, 'data': base64.encode(p.bytes)},
+    ],
     'meta': meta,
   };
   final Map<String, Object?> envelope;
@@ -229,6 +238,7 @@ BackupInfo _info(Map<String, Object?> envelope) {
       createdAt: DateTime.parse(info['createdAt'] as String),
       accounts: info['accounts'] as int,
       transactions: info['transactions'] as int,
+      photos: info['photos'] as int? ?? 0,
       encrypted: envelope.containsKey('encryption'),
       firstDate: _parseDate(info['firstDate']),
       lastDate: _parseDate(info['lastDate']),
@@ -270,6 +280,15 @@ BackupInfo _info(Map<String, Object?> envelope) {
         next: _parseDate(r['next']),
       ),
   ];
+  final photos = [
+    for (final p in d['photos'] as List? ?? const [])
+      Photo(
+        id: (p as Map)['id'] as String,
+        txnId: p['txnId'] as String,
+        mime: p['mime'] as String? ?? 'image/jpeg',
+        bytes: base64.decode(p['data'] as String),
+      ),
+  ];
   final ledger = InMemoryLedger(
     accounts: accounts,
     categories: categories,
@@ -277,6 +296,7 @@ BackupInfo _info(Map<String, Object?> envelope) {
     transactions: txns,
     budgets: budgets,
     recurrings: recurrings,
+    photos: photos,
   );
   // Check integrity only, not today's naming rules: an old backup must
   // stay restorable even if the app has since become stricter.
@@ -293,6 +313,11 @@ BackupInfo _info(Map<String, Object?> envelope) {
   unique('紀錄', txns.map((t) => t.id));
   unique('預算', budgets.map((b) => b.id));
   unique('週期收支', recurrings.map((r) => r.id));
+  unique('照片', photos.map((p) => p.id));
+  final txnIds = {for (final t in txns) t.id};
+  if (photos.any((p) => !txnIds.contains(p.txnId))) {
+    throw BackupException('備份檔的內容不一致：照片對應的紀錄不存在');
+  }
   for (final r in recurrings) {
     try {
       checkTxn(ledger, r.template);

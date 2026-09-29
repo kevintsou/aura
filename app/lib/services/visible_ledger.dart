@@ -51,5 +51,17 @@ class VisibleLedger implements LedgerReader {
   };
 
   @override
+  List<String> photoIds(String txnId) => txn(txnId) == null ? const [] : _ledger.photoIds(txnId);
+
+  @override
+  Photo? photo(String id) => switch (_ledger.photo(id)) {
+    final p? when txn(p.txnId) != null => p,
+    _ => null,
+  };
+
+  @override
+  Iterable<Photo> photos() => _ledger.photos().where((p) => txn(p.txnId) != null);
+
+  @override
   Iterable<AccountFlow> accountFlows() => _ledger.accountFlows().where((f) => !hidden.contains(f.accountId));
 }

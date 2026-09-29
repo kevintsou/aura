@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'dart:typed_data';
+
 import 'package:decimal/decimal.dart';
 
 import 'balance.dart';
@@ -105,6 +107,16 @@ class Category {
 
   Category renamed(String name) =>
       Category(id: id, kind: kind, name: name, parentId: parentId);
+}
+
+/// A picture attached to a record (a receipt, the thing bought).
+class Photo {
+  const Photo({required this.id, required this.txnId, required this.bytes, this.mime = 'image/jpeg'});
+
+  final String id;
+  final String txnId;
+  final Uint8List bytes;
+  final String mime;
 }
 
 /// A monthly spending limit in the base currency.

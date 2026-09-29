@@ -83,6 +83,13 @@ abstract interface class LedgerReader {
   /// The transaction with [id], if any.
   Txn? txn(String id);
 
+  /// Ids of [txnId]'s photos, in the order they were added.
+  List<String> photoIds(String txnId);
+  Photo? photo(String id);
+
+  /// Every photo, for backups and copies.
+  Iterable<Photo> photos();
+
   /// Every movement of money per account, for balance calculations.
   /// Cheaper than loading full transactions.
   Iterable<AccountFlow> accountFlows();
@@ -92,7 +99,7 @@ abstract interface class LedgerReader {
 /// implementation: SQLite on devices, memory in tests and on the web).
 abstract interface class LedgerStore implements LedgerReader {
   /// Atomically replaces every account, category, project, budget,
-  /// recurring item and transaction with those of [source].
+  /// recurring item, transaction and photo with those of [source].
   void replaceAll(LedgerReader source);
 
   /// Sets or clears an account's known balance.
@@ -133,6 +140,10 @@ abstract interface class LedgerStore implements LedgerReader {
   void setBudget(Budget budget);
   void deleteBudget(String budgetId);
 
+  /// Attaches [photo] to its transaction.
+  void addPhoto(Photo photo);
+  void deletePhoto(String photoId);
+
   /// Adds [recurring], or replaces the one with the same id.
   void setRecurring(Recurring recurring);
 
@@ -161,10 +172,12 @@ class InMemoryLedger implements LedgerStore {
     List<Txn> transactions = const [],
     List<Budget> budgets = const [],
     List<Recurring> recurrings = const [],
+    List<Photo> photos = const [],
   }) {
     _load(accounts, categories, projects, transactions);
     _budgets = {for (final b in budgets) b.id: b};
     _recurrings = {for (final r in recurrings) r.id: r};
+    _photos = {for (final p in photos) p.id: p};
   }
 
   Map<String, Account> _accounts = {};
@@ -173,6 +186,7 @@ class InMemoryLedger implements LedgerStore {
   List<Txn> _txns = [];
   Map<String, Budget> _budgets = {};
   Map<String, Recurring> _recurrings = {};
+  Map<String, Photo> _photos = {};
   final Map<String, String> _meta = {};
 
   void _load(
@@ -203,6 +217,11 @@ class InMemoryLedger implements LedgerStore {
     );
     _budgets = {for (final b in source.budgets) b.id: b};
     _recurrings = {for (final r in source.recurrings) r.id: r};
+    final ids = {for (final t in _txns) t.id};
+    _photos = {
+      for (final p in source.photos())
+        if (ids.contains(p.txnId)) p.id: p,
+    };
   }
 
   @override
@@ -336,6 +355,30 @@ class InMemoryLedger implements LedgerStore {
   Txn? txn(String id) => _txns.where((t) => t.id == id).firstOrNull;
 
   @override
+  List<String> photoIds(String txnId) => [
+    for (final p in _photos.values)
+      if (p.txnId == txnId) p.id,
+  ];
+
+  @override
+  Photo? photo(String id) => _photos[id];
+
+  @override
+  Iterable<Photo> photos() => List.unmodifiable(_photos.values);
+
+  @override
+  void addPhoto(Photo photo) {
+    checkNewId(_photos.containsKey(photo.id), photo.id);
+    if (txn(photo.txnId) == null) throw ArgumentError.value(photo.txnId, 'txnId', '紀錄不存在');
+    _photos[photo.id] = photo;
+  }
+
+  @override
+  void deletePhoto(String photoId) {
+    if (_photos.remove(photoId) == null) throw ArgumentError.value(photoId, 'photoId');
+  }
+
+  @override
   void addTxn(Txn txn) {
     checkNewId(_txns.any((t) => t.id == txn.id), txn.id);
     checkTxn(this, txn);
@@ -359,6 +402,7 @@ class InMemoryLedger implements LedgerStore {
       for (final t in _txns)
         if (t.id != txnId) t.feeOfTxnId == txnId ? t.withoutFeeLink() : t,
     ];
+    _photos.removeWhere((_, p) => p.txnId == txnId);
   }
 
   @override

@@ -117,6 +117,17 @@ const migrations = <String>[
   '''
   ALTER TABLE accounts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
   ''',
+  // 7: photos on records, kept apart so listing records never loads them.
+  '''
+  CREATE TABLE photos (
+    seq    INTEGER PRIMARY KEY,          -- order added
+    id     TEXT NOT NULL UNIQUE,
+    txn_id TEXT NOT NULL REFERENCES txns (id) ON DELETE CASCADE,
+    mime   TEXT NOT NULL,
+    bytes  BLOB NOT NULL
+  );
+  CREATE INDEX photos_by_txn ON photos (txn_id);
+  ''',
 ];
 
 /// Brings [db] up to the latest schema. Each step runs in a transaction.

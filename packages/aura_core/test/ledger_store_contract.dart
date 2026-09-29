@@ -1,5 +1,7 @@
 // Behaviour every LedgerStore must have. Run by aura_core (in memory) and
 // aura_store (SQLite) so both stores stay interchangeable.
+import 'dart:typed_data';
+
 import 'package:aura_core/aura_core.dart';
 import 'package:decimal/decimal.dart';
 import 'package:test/test.dart';
@@ -390,6 +392,39 @@ void ledgerStoreContract(LedgerStore Function() create) {
       l.replaceAll(InMemoryLedger());
       expect(l.recurrings, isEmpty);
     });
+  });
+
+  test('photos belong to a record and go with it', () {
+    l
+      ..addTxn(expense('t1'))
+      ..addTxn(expense('t2'));
+    Photo photo(String id, String txn, List<int> bytes) =>
+        Photo(id: id, txnId: txn, bytes: Uint8List.fromList(bytes));
+    l
+      ..addPhoto(photo('p1', 't1', [1, 2, 3]))
+      ..addPhoto(photo('p2', 't1', [4]))
+      ..addPhoto(photo('p3', 't2', [5]));
+    expect(l.photoIds('t1'), ['p1', 'p2']);
+    expect(l.photo('p1')!.bytes, [1, 2, 3]);
+    expect(l.photo('p1')!.mime, 'image/jpeg');
+    expect(() => l.addPhoto(photo('p1', 't2', [0])), throwsArgumentError);
+    expect(() => l.addPhoto(photo('p9', 'nope', [0])), throwsArgumentError);
+
+    l.deletePhoto('p2');
+    expect(l.photoIds('t1'), ['p1']);
+    l.deleteTxn('t1');
+    expect(l.photo('p1'), isNull);
+    expect([for (final p in l.photos()) p.id], ['p3']);
+
+    l.replaceAll(
+      InMemoryLedger(
+        accounts: [cash],
+        categories: [food, lunch],
+        transactions: [expense('t9')],
+        photos: [photo('p9', 't9', [9]), photo('px', 'gone', [0])],
+      ),
+    );
+    expect([for (final p in l.photos()) p.id], ['p9'], reason: 'orphans are dropped');
   });
 
   test('meta values are listed', () {

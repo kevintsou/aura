@@ -65,6 +65,7 @@ class CwmMergePlan {
       projects: [...current.projects, ...newProjects],
       budgets: current.budgets,
       recurrings: current.recurrings,
+      photos: current.photos().toList(),
       transactions: [
         for (final t in current.transactions()) replaced[t.id] ?? t,
         for (final t in added)

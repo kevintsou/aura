@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:aura_core/aura_core.dart';
@@ -15,6 +16,7 @@ Object? _snapshot(LedgerReader l) => [
   [for (final c in l.categories) [c.id, c.kind, c.name, c.parentId]],
   [for (final p in l.projects) [p.id, p.name]],
   [for (final b in l.budgets) [b.id, b.categoryId, b.amount]],
+  [for (final p in l.photos()) [p.id, p.txnId, p.mime, p.bytes]],
   [
     for (final r in l.recurrings)
       [r.id, r.unit, r.every, r.until, r.times, r.next, r.template.accountId, r.template.categoryId, r.template.amount,
@@ -78,6 +80,9 @@ void main() {
       ),
     );
     recordDueRecurring(ledger, today: DateTime(2026, 9, 29));
+    ledger.addPhoto(
+      Photo(id: 'ph1', txnId: ledger.transactions().first.id, bytes: Uint8List.fromList(List.generate(300, (i) => i % 256))),
+    );
   });
 
   test('round-trips every field without a password', () async {

@@ -32,6 +32,7 @@
     "categories":   [{"id", "kind", "name", "parentId"?}],            // 依顯示順序
     "projects":     [{"id", "name"}],
     "budgets"?:     [{"id", "categoryId"?, "amount"}],               // 每月金額；沒有 categoryId 是總預算
+    "photos"?:      [{"id", "txnId", "mime", "data": "base64"}],     // 紀錄上的照片（JPEG）
     "recurring"?:   [{"id", "template": {紀錄的欄位，date 是第一次}, "unit", "every",
                       "until"?, "times"?, "next"?}],                  // 沒有 next 表示已結束
     "transactions": [{"id", "kind", "date", "amount", "baseAmount", "accountId"?, "toAccountId"?,
@@ -45,7 +46,7 @@
 ```
 
 - 金額一律是**十進位字串**，不會有浮點誤差。
-- `budgets`、`recurring`、`recurringId` 是後來加的欄位：舊的備份檔沒有它們，還原時就是沒有預算和週期收支；舊版 App 讀到新檔案會略過它們。
+- `budgets`、`recurring`、`recurringId`、`photos` 是後來加的欄位：舊的備份檔沒有它們，還原時就是沒有預算和週期收支；舊版 App 讀到新檔案會略過它們。
 - 日期是 `YYYY-MM-DD`。
 
 **加密（設了密碼時）：** 把 `data` 換成：

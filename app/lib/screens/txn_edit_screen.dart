@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:aura_core/aura_core.dart';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +47,10 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   final _times = TextEditingController(text: '12');
   var _end = _End.never;
   DateTime? _until;
+
+  /// Photo changes, applied on save.
+  final _newPhotos = <Uint8List>[];
+  final _removedPhotos = <String>{};
 
   AppState get _app => widget.app;
   LedgerStore get _ledger => _app.ledger;
@@ -270,7 +276,9 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   void _save() {
     final (txn, problem) = _build();
     if (problem != null || _unit == null) {
-      final error = problem ?? _app.saveTxn(txn!, isNew: _isNew);
+      final error =
+          problem ??
+          _app.saveTxn(txn!, isNew: _isNew, addPhotos: _newPhotos, removePhotos: [..._removedPhotos]);
       if (error != null) {
         setState(() => _error = error);
         return;
@@ -523,6 +531,12 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             minLines: 1,
             decoration: const InputDecoration(labelText: '備註', border: OutlineInputBorder()),
           ),
+          if (_unit == null) ...[
+            const SizedBox(height: 16),
+            Text('照片（收據、商品）', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            _photos(theme),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!, key: const Key('txnError'), style: TextStyle(color: theme.colorScheme.error)),
@@ -541,6 +555,115 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  List<String> get _keptPhotoIds => [
+    for (final id in _old == null ? const <String>[] : _ledger.photoIds(_old!.id))
+      if (!_removedPhotos.contains(id)) id,
+  ];
+
+  Future<void> _addPhoto() async {
+    final picker = _app.photoPicker;
+    final camera = picker.hasCamera
+        ? await showModalBottomSheet<bool>(
+            context: context,
+            builder: (context) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    key: const Key('photoCamera'),
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: const Text('拍照'),
+                    onTap: () => Navigator.pop(context, true),
+                  ),
+                  ListTile(
+                    key: const Key('photoGallery'),
+                    leading: const Icon(Icons.photo_library_outlined),
+                    title: const Text('從相簿選擇'),
+                    onTap: () => Navigator.pop(context, false),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : false;
+    if (camera == null || !mounted) return;
+    final bytes = await _app.lock.whileAway(() => picker.pick(camera: camera));
+    if (bytes != null && mounted) setState(() => _newPhotos.add(bytes));
+  }
+
+  /// Full screen, zoomable; true when the user deleted it.
+  Future<bool> _viewPhoto(Uint8List bytes) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => Dialog.fullscreen(
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(maxScale: 5, child: Center(child: Image.memory(bytes))),
+              ),
+              SafeArea(
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: '關閉',
+                      color: Colors.white,
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      key: const Key('deletePhoto'),
+                      tooltip: '刪除照片',
+                      color: Colors.white,
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ) ??
+      false;
+
+  Widget _photos(ThemeData theme) {
+    Widget thumb(Uint8List bytes, VoidCallback onDelete, Key key) => InkWell(
+      key: key,
+      onTap: () async {
+        if (await _viewPhoto(bytes)) setState(onDelete);
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(bytes, width: 72, height: 72, fit: BoxFit.cover, semanticLabel: '照片'),
+      ),
+    );
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final id in _keptPhotoIds)
+          if (_ledger.photo(id) case final p?) thumb(p.bytes, () => _removedPhotos.add(id), Key('photo-$id')),
+        for (final (i, bytes) in _newPhotos.indexed)
+          thumb(bytes, () => _newPhotos.removeAt(i), Key('newPhoto-$i')),
+        SizedBox(
+          width: 72,
+          height: 72,
+          child: OutlinedButton(
+            key: const Key('addPhoto'),
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: _addPhoto,
+            child: const Tooltip(message: '加照片', child: Icon(Icons.add_a_photo_outlined)),
+          ),
+        ),
+      ],
     );
   }
 

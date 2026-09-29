@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:aura_core/aura_core.dart';
 import 'package:decimal/decimal.dart';
@@ -383,7 +384,7 @@ class SqliteLedger implements LedgerStore {
   void replaceAll(LedgerReader source) {
     _atomic(() {
       for (final table in const [
-        'invoice_items', 'invoices', 'txns', 'recurring', 'budgets', 'categories', 'projects', //
+        'photos', 'invoice_items', 'invoices', 'txns', 'recurring', 'budgets', 'categories', 'projects', //
         'accounts',
       ]) {
         _db.execute('DELETE FROM $table');
@@ -425,6 +426,15 @@ class SqliteLedger implements LedgerStore {
     each(_insertTxn, txns, (t, _) => _txnArgs(t));
     final withInvoice = txns.where((t) => t.invoice != null);
     each(_insertInvoice, withInvoice, (t, _) => _invoiceArgs(t));
+    final ids = {for (final t in txns) t.id};
+    each(
+      _insertPhoto,
+      [
+        for (final p in source.photos())
+          if (ids.contains(p.txnId)) p,
+      ],
+      (p, _) => [p.id, p.txnId, p.mime, p.bytes],
+    );
     each(
       _insertItem,
       [
@@ -580,6 +590,40 @@ class SqliteLedger implements LedgerStore {
   }
 
   @override
+  List<String> photoIds(String txnId) => [
+    for (final r in _db.select('SELECT id FROM photos WHERE txn_id = ? ORDER BY seq', [txnId])) r['id'] as String,
+  ];
+
+  Photo _photoFromRow(Row r) => Photo(
+    id: r['id'] as String,
+    txnId: r['txn_id'] as String,
+    mime: r['mime'] as String,
+    bytes: r['bytes'] as Uint8List,
+  );
+
+  @override
+  Photo? photo(String id) => switch (_db.select('SELECT * FROM photos WHERE id = ?', [id]).firstOrNull) {
+    final r? => _photoFromRow(r),
+    _ => null,
+  };
+
+  @override
+  Iterable<Photo> photos() => [for (final r in _db.select('SELECT * FROM photos ORDER BY seq')) _photoFromRow(r)];
+
+  @override
+  void addPhoto(Photo photo) {
+    checkNewId(_db.select('SELECT 1 FROM photos WHERE id = ?', [photo.id]).isNotEmpty, photo.id);
+    if (!_txnExists(photo.txnId)) throw ArgumentError.value(photo.txnId, 'txnId', '紀錄不存在');
+    _db.execute(_insertPhoto, [photo.id, photo.txnId, photo.mime, photo.bytes]);
+  }
+
+  @override
+  void deletePhoto(String photoId) {
+    _db.execute('DELETE FROM photos WHERE id = ?', [photoId]);
+    if (_db.updatedRows == 0) throw ArgumentError.value(photoId, 'photoId');
+  }
+
+  @override
   Txn? txn(String id) {
     final r = _db.select('SELECT * FROM txns WHERE id = ?', [id]).firstOrNull;
     if (r == null) return null;
@@ -692,6 +736,8 @@ const _insertCategory =
 
 List<Object?> _categoryArgs(Category c, int sort) =>
     [c.id, c.kind.name, c.name, c.parentId, sort];
+
+const _insertPhoto = 'INSERT INTO photos (id, txn_id, mime, bytes) VALUES (?, ?, ?, ?)';
 
 const _insertBudget = 'INSERT INTO budgets (id, category_id, amount, sort) VALUES (?, ?, ?, ?)';
 

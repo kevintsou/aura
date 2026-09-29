@@ -8,6 +8,7 @@ import 'cloud/google_drive.dart';
 import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
+import 'services/photo_picker.dart';
 import 'services/visible_ledger.dart';
 import 'services/snapshot_store.dart';
 
@@ -31,6 +32,7 @@ InMemoryLedger _detached(LedgerReader source) => InMemoryLedger(
   transactions: source.transactions(),
   budgets: source.budgets,
   recurrings: source.recurrings,
+  photos: source.photos().toList(),
 );
 
 Future<Uint8List> _encode(
@@ -87,7 +89,9 @@ class AppState extends ChangeNotifier {
     CloudSettingsStore? cloudStore,
     GoogleTokens? google,
     CloudTargetFactory? cloudTargets,
+    PhotoPicker? photoPicker,
   }) : lock = lock ?? AppLock.off(),
+       photoPicker = photoPicker ?? DevicePhotoPicker(),
        _cloudStore = cloudStore ?? MemoryCloudSettingsStore(),
        _google = google,
        _cloudTargets = cloudTargets,
@@ -106,6 +110,8 @@ class AppState extends ChangeNotifier {
 
   /// PIN / biometric lock in front of the whole app.
   final AppLock lock;
+
+  final PhotoPicker photoPicker;
 
   final CloudSettingsStore _cloudStore;
   final GoogleTokens? _google;
@@ -268,10 +274,19 @@ class AppState extends ChangeNotifier {
   String? lastCategoryId(TxnKind kind) =>
       ledger.meta('ui.lastCategory.${kind.name}');
 
-  /// Adds or replaces [txn] and remembers its account and category as the
-  /// defaults for the next record.
-  String? saveTxn(Txn txn, {required bool isNew}) => write((l) {
+  /// Adds or replaces [txn], adds and removes photos, and remembers its
+  /// account and category as the defaults for the next record.
+  String? saveTxn(
+    Txn txn, {
+    required bool isNew,
+    List<Uint8List> addPhotos = const [],
+    List<String> removePhotos = const [],
+  }) => write((l) {
     isNew ? l.addTxn(txn) : l.updateTxn(txn);
+    removePhotos.forEach(l.deletePhoto);
+    for (final bytes in addPhotos) {
+      l.addPhoto(Photo(id: newId('ph'), txnId: txn.id, bytes: bytes));
+    }
     l.setMeta('ui.lastAccount', txn.accountId);
     if (txn.categoryId != null) {
       l.setMeta('ui.lastCategory.${txn.kind.name}', txn.categoryId);
