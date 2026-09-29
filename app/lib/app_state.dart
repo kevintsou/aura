@@ -3,6 +3,8 @@ import 'package:aura_core/aura_core.dart';
 import 'package:flutter/foundation.dart';
 
 import 'services/ai_settings_store.dart';
+import 'services/backup_files.dart';
+import 'services/snapshot_store.dart';
 
 typedef AiClientFactory =
     AiClient Function(AiEndpointConfig config, String? apiKey);
@@ -13,19 +15,60 @@ AiClient _defaultClient(AiEndpointConfig config, String? apiKey) =>
 const _metaImportFile = 'import.fileName';
 const _metaImportedAt = 'import.at';
 
+/// Device-specific meta, not taken from a restored backup.
+const _metaLastBackup = 'backup.lastAt';
+
+/// A copy of [source] that can be sent to another isolate.
+InMemoryLedger _detached(LedgerReader source) => InMemoryLedger(
+  accounts: source.accounts,
+  categories: source.categories,
+  projects: source.projects,
+  transactions: source.transactions(),
+);
+
+Future<Uint8List> _encode(
+  ({
+    InMemoryLedger ledger,
+    DateTime at,
+    Map<String, String> meta,
+    String? password,
+    int iterations,
+  })
+  job,
+) => encodeBackup(
+  job.ledger,
+  createdAt: job.at,
+  meta: job.meta,
+  password: job.password,
+  iterations: job.iterations,
+);
+
+Future<BackupContents> _decode(({List<int> bytes, String? password}) job) =>
+    decodeBackup(job.bytes, password: job.password);
+
 /// App-wide state: the ledger, the AI connection and the assistant
 /// conversation. Plain ChangeNotifier until the app outgrows it.
 class AppState extends ChangeNotifier {
   AppState({
     required this.ledger,
     required this.settings,
+    BackupFiles? files,
+    SnapshotStore? snapshots,
     this.clientFactory = _defaultClient,
+    this.kdfIterations = backupKdfIterations,
     DateTime Function()? clock,
-  }) : clock = clock ?? DateTime.now;
+  }) : files = files ?? DeviceBackupFiles(),
+       snapshots = snapshots ?? MemorySnapshotStore(),
+       clock = clock ?? DateTime.now;
 
   /// Persistent on devices (SQLite), in memory on the web and in tests.
   final LedgerStore ledger;
   final AiSettingsStore settings;
+  final BackupFiles files;
+  final SnapshotStore snapshots;
+
+  /// Key-derivation rounds for password-protected backups (lower in tests).
+  final int kdfIterations;
   final AiClientFactory clientFactory;
   final DateTime Function() clock;
 
@@ -147,6 +190,7 @@ class AppState extends ChangeNotifier {
     }
     _carryOverAccountDetails(result.ledger);
     final (kept, dropped) = _carryOverAnchors(result.ledger);
+    await takeSnapshot(SnapshotReason.beforeImport);
     try {
       ledger.replaceAll(result.ledger);
     } on Exception catch (e) {
@@ -162,6 +206,73 @@ class AppState extends ChangeNotifier {
     assistant.reset();
     notifyListeners();
     return null;
+  }
+
+  DateTime? get lastBackupAt => switch (ledger.meta(_metaLastBackup)) {
+    final String s => DateTime.parse(s),
+    _ => null,
+  };
+
+  /// Whether to nudge the user to back up: data exists and there is no
+  /// backup file from the last 30 days.
+  bool get backupOverdue {
+    if (ledger.count() == 0) return false;
+    final last = lastBackupAt;
+    return last == null || clock().difference(last).inDays >= 30;
+  }
+
+  Future<Uint8List> _encodeCurrent({String? password}) => compute(_encode, (
+    ledger: _detached(ledger),
+    at: clock(),
+    meta: {
+      for (final e in ledger.allMeta().entries)
+        if (!e.key.startsWith('backup.')) e.key: e.value,
+    },
+    password: password,
+    iterations: kdfIterations,
+  ));
+
+  /// Creates a backup file and lets the user choose where to save it.
+  /// Returns the file name, or null when the user cancelled.
+  Future<String?> exportBackup({String? password}) async {
+    final bytes = await _encodeCurrent(password: password);
+    final now = clock();
+    final name = 'aura-${now.year}${_two(now.month)}${_two(now.day)}-'
+        '${_two(now.hour)}${_two(now.minute)}.$backupExtension';
+    if (!await files.save(name, bytes)) return null;
+    ledger.setMeta(_metaLastBackup, now.toIso8601String());
+    notifyListeners();
+    return name;
+  }
+
+  /// Replaces the ledger with a backup, after keeping a snapshot of the
+  /// current data. Throws [BackupException] for a bad file or password.
+  Future<BackupInfo> restoreBackup(List<int> bytes, {String? password}) async {
+    final contents = await compute(_decode, (bytes: bytes, password: password));
+    await takeSnapshot(SnapshotReason.beforeRestore);
+    ledger.replaceAll(contents.ledger);
+    for (final e in contents.meta.entries) {
+      if (!e.key.startsWith('backup.')) ledger.setMeta(e.key, e.value);
+    }
+    revision++;
+    assistant.reset();
+    notifyListeners();
+    return contents.info;
+  }
+
+  /// Keeps a copy of the current data on the device (not when empty).
+  Future<void> takeSnapshot(SnapshotReason reason) async {
+    if (isBlank) return;
+    await snapshots.save(await _encodeCurrent(), at: clock(), reason: reason);
+  }
+
+  /// A daily snapshot, taken at most once a day when the app opens.
+  Future<void> dailySnapshot() async {
+    final last = (await snapshots.list()).firstOrNull;
+    if (last != null && clock().difference(last.at) < const Duration(days: 1)) {
+      return;
+    }
+    await takeSnapshot(SnapshotReason.daily);
   }
 
   /// Keeps the type and currency of accounts that existed before (matched
@@ -317,3 +428,5 @@ class AssistantSession extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+String _two(int n) => n.toString().padLeft(2, '0');

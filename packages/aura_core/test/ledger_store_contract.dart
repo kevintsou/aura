@@ -236,6 +236,14 @@ void ledgerStoreContract(LedgerStore Function() create) {
     });
   });
 
+  test('meta values are listed', () {
+    l
+      ..setMeta('a', '1')
+      ..setMeta('b', '2')
+      ..setMeta('a', null);
+    expect(l.allMeta(), {'b': '2'});
+  });
+
   test('projects can be added once per name', () {
     l.addProject(const Project(id: 'p1', name: '旅遊'));
     expect(() => l.addProject(const Project(id: 'p2', name: '旅遊')), throwsArgumentError);

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../format.dart';
 import 'ai_settings_screen.dart';
+import 'backup_screen.dart';
 import 'categories_screen.dart';
 import 'import_action.dart';
 
@@ -30,6 +32,24 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => AiSettingsScreen(app: app)),
+            ),
+          ),
+          ListTile(
+            key: const Key('backupSettings'),
+            leading: Icon(
+              app.backupOverdue ? Icons.warning_amber : Icons.backup_outlined,
+              color: app.backupOverdue ? Theme.of(context).colorScheme.error : null,
+            ),
+            title: const Text('備份與還原'),
+            subtitle: Text(
+              app.lastBackupAt == null
+                  ? '還沒有備份檔'
+                  : '上次備份：${formatDate(app.lastBackupAt!)}',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => BackupScreen(app: app)),
             ),
           ),
           ListTile(

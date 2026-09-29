@@ -142,6 +142,12 @@ class SqliteLedger implements LedgerStore {
   }
 
   @override
+  Map<String, String> allMeta() => {
+    for (final r in _db.select('SELECT key, value FROM meta'))
+      r['key'] as String: r['value'] as String,
+  };
+
+  @override
   String? meta(String key) =>
       _db
               .select('SELECT value FROM meta WHERE key = ?', [key])

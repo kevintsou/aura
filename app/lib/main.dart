@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -8,14 +10,18 @@ import 'screens/settings_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'services/ai_settings_store.dart';
 import 'services/ledger_store.dart';
+import 'services/snapshot_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final app = AppState(
     ledger: await openLedgerStore(),
     settings: DeviceAiSettingsStore(),
+    snapshots: await openSnapshotStore(),
   );
   await app.load();
+  // In the background: a slow snapshot must not delay the first frame.
+  unawaited(app.dailySnapshot());
   runApp(AuraApp(app: app));
 }
 

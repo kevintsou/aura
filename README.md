@@ -3,6 +3,7 @@
 免費的手機記帳 App：
 
 - **可以從頭開始記帳**：第一次打開選「從頭開始」，會建立常用分類和一個現金帳戶，然後就能記支出、收入、轉帳（含外幣）。
+- **備份與還原**：建立 `.aura` 備份檔（可以設密碼，AES-256 加密），存到 Google Drive、iCloud 或任何地方，換手機時還原。手機上也會每天、以及匯入和還原之前自動保留快照，操作失誤可以救回。
 - **相容 CWMoney**：也可以直接匯入 CWMoney 經典版匯出的 CSV。匯入後輸入各帳戶今天的實際餘額，就會自動算出期初餘額。
 - **AI 自己接**：用自己的 OpenAI API 金鑰，或任何 OpenAI 相容服務、本機模型、自己寫的 Agent，用自然語言分析自己的收支。
 
@@ -27,6 +28,7 @@ examples/mock_agent.py  最小的自訂 Agent 範例（只用 Python 標準函�
 tool/                   開發工具（Big5-HKSCS 對照表產生器）
 docs/
   PROPOSAL.md           專案提案
+  backup-format.md      .aura 備份檔格式
   cwmoney-format.md     CWMoney 匯出格式規格（逆向分析）
   ai-agent-api.md       接自己的 AI Agent：協定與工具規格
 ```

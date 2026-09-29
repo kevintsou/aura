@@ -106,6 +106,7 @@ abstract interface class LedgerStore implements LedgerReader {
   /// Small key/value settings kept with the data (e.g. last import).
   String? meta(String key);
   void setMeta(String key, String? value);
+  Map<String, String> allMeta();
 
   void close();
 }
@@ -279,6 +280,9 @@ class InMemoryLedger implements LedgerStore {
   @override
   void setMeta(String key, String? value) =>
       value == null ? _meta.remove(key) : _meta[key] = value;
+
+  @override
+  Map<String, String> allMeta() => Map.unmodifiable(_meta);
 
   @override
   void close() {}
