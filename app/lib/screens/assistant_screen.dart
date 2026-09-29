@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/tool_chart.dart';
 import 'ai_settings_screen.dart';
 
 const _suggestions = [
@@ -246,7 +247,16 @@ class _ChatBubble extends StatelessWidget {
         color: scheme.errorContainer,
         child: Text(message),
       ),
-      final ToolChatItem tool => _ToolTile(item: tool),
+      final ToolChatItem tool => switch (tool.result) {
+        final r? when r.ok => switch (ToolChartData.from(tool.call.name, r.content)) {
+          final chart? => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [_ToolTile(item: tool), ToolChart(data: chart)],
+          ),
+          null => _ToolTile(item: tool),
+        },
+        _ => _ToolTile(item: tool),
+      },
     };
   }
 }
