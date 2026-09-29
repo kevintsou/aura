@@ -6,18 +6,28 @@ Future<String?> askText(
   required String title,
   required String label,
   String initial = '',
+  bool obscure = false,
+  String? message,
 }) async {
   final controller = TextEditingController(text: initial);
   final result = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
-      content: TextField(
-        key: const Key('askText'),
-        controller: controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: label),
-        onSubmitted: (v) => Navigator.pop(context, v),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (message != null) ...[Text(message), const SizedBox(height: 8)],
+          TextField(
+            key: const Key('askText'),
+            controller: controller,
+            autofocus: true,
+            obscureText: obscure,
+            decoration: InputDecoration(labelText: label),
+            onSubmitted: (v) => Navigator.pop(context, v),
+          ),
+        ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),

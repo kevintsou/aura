@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app_state.dart';
+import 'cloud/cloud_backup.dart';
 import 'lock/app_lock.dart';
 import 'lock/lock_screen.dart';
 import 'screens/accounts_screen.dart';
@@ -25,6 +26,7 @@ Future<void> main() async {
     settings: DeviceAiSettingsStore(),
     snapshots: await openSnapshotStore(),
     lock: lock,
+    cloudStore: DeviceCloudSettingsStore(),
   );
   await app.load();
   // In the background: a slow snapshot must not delay the first frame.
@@ -74,9 +76,10 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    // Record what came due while the app was closed or in the background.
-    _lifecycle = AppLifecycleListener(onResume: _runRecurring);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _runRecurring());
+    // Record what came due while the app was closed or in the background,
+    // and back up to the cloud when a backup is due.
+    _lifecycle = AppLifecycleListener(onResume: _onForeground);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onForeground());
   }
 
   @override
@@ -85,8 +88,9 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  void _runRecurring() {
+  void _onForeground() {
     if (!mounted) return;
+    unawaited(widget.app.cloud.runIfDue());
     final run = widget.app.runRecurring();
     final messages = [
       if (run.recorded.isNotEmpty) '已自動記入 ${run.recorded.length} 筆週期收支',

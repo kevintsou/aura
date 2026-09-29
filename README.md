@@ -7,7 +7,7 @@
 - **週期收支**：房租、薪水、訂閱、信用卡分期設定一次，到期打開 App 就自動記好（沒開的日子會補記）。
 - **預算**：設定每月總預算或分類預算，看還剩多少、每天還可以花多少，花太快或超支時會提醒。
 - **App 鎖**：PIN 碼或指紋／臉部解鎖，離開 App 一段時間後自動上鎖，切換 App 時也不會露出金額。
-- **備份與還原**：建立 `.aura` 備份檔（可以設密碼，AES-256 加密），存到 Google Drive、iCloud 或任何地方，換手機時還原。手機上也會每天、以及匯入和還原之前自動保留快照，操作失誤可以救回。
+- **備份與還原**：建立 `.aura` 備份檔（可以設密碼，AES-256 加密），存到 Google Drive、iCloud 或任何地方，換手機時還原。也可以開啟**雲端備份**，每天自動加密備份到自己的 Google 雲端硬碟或 WebDAV（Nextcloud、NAS…）。手機上也會每天、以及匯入和還原之前自動保留快照，操作失誤可以救回。
 - **相容 CWMoney**：也可以直接匯入 CWMoney 經典版匯出的 CSV。匯入後輸入各帳戶今天的實際餘額，就會自動算出期初餘額。之後在 CWMoney 匯出的新月份可以**合併**進來，已經有的紀錄會自動略過。
 - **AI 自己接**：用自己的 OpenAI API 金鑰，或任何 OpenAI 相容服務、本機模型、自己寫的 Agent，用自然語言分析自己的收支。
 
@@ -24,6 +24,8 @@
 ```
 app/                    Flutter App（iOS / Android / Web）
   lib/screens/          紀錄、報表、預算、週期收支、帳戶、AI 助理、AI 連線設定、設定
+  lib/cloud/            雲端備份（WebDAV、Google 雲端硬碟）
+  lib/lock/             App 鎖
 packages/
   aura_core/            資料模型、帳本查詢、報表與預算計算、週期收支、CWMoney 匯入與合併（純 Dart）
   aura_ai/              AI 連線（OpenAI 相容）、帳本工具、Agent 迴圈（純 Dart）
@@ -33,6 +35,7 @@ tool/                   開發工具（Big5-HKSCS 對照表產生器）
 docs/
   PROPOSAL.md           專案提案
   backup-format.md      .aura 備份檔格式
+  cloud-backup.md       雲端備份：運作方式、WebDAV、Google 雲端硬碟的 OAuth 設定
   cwmoney-format.md     CWMoney 匯出格式規格（逆向分析）
   ai-agent-api.md       接自己的 AI Agent：協定與工具規格
 ```

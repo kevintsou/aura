@@ -4,6 +4,8 @@ import 'package:aura_core/aura_core.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../cloud/cloud_backup.dart';
+import '../cloud/cloud_backup_screen.dart';
 import '../format.dart';
 import '../services/snapshot_store.dart';
 import 'dialogs.dart';
@@ -109,7 +111,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListenableBuilder(
-      listenable: _app,
+      listenable: Listenable.merge([_app, _app.cloud]),
       builder: (context, _) {
         final last = _app.lastBackupAt;
         return Scaffold(
@@ -158,6 +160,26 @@ class _BackupScreenState extends State<BackupScreen> {
                 onPressed: _restoreFromFile,
                 icon: const Icon(Icons.settings_backup_restore),
                 label: const Text('從備份檔還原'),
+              ),
+              const SizedBox(height: 24),
+              Card.outlined(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  key: const Key('openCloudBackup'),
+                  leading: const Icon(Icons.cloud_sync_outlined),
+                  title: const Text('雲端備份'),
+                  subtitle: Text(switch (_app.cloud.config) {
+                    CloudConfig(kind: null) => '自動加密備份到 Google 雲端硬碟或 WebDAV',
+                    CloudConfig(lastError: final String e) => '上次備份失敗：$e',
+                    CloudConfig(lastSuccess: final DateTime t) => '上次雲端備份：${_formatTime(t)}',
+                    _ => '已開啟，還沒有備份過',
+                  }),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => CloudBackupScreen(app: _app)),
+                  ),
+                ),
               ),
               const SizedBox(height: 32),
               Text('手機上的自動備份', style: theme.textTheme.titleSmall),

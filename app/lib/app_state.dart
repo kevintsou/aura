@@ -2,6 +2,8 @@ import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
 import 'package:flutter/foundation.dart' hide Category;
 
+import 'cloud/cloud_backup.dart';
+import 'cloud/google_drive.dart';
 import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
@@ -76,7 +78,13 @@ class AppState extends ChangeNotifier {
     this.kdfIterations = backupKdfIterations,
     DateTime Function()? clock,
     AppLock? lock,
+    CloudSettingsStore? cloudStore,
+    GoogleTokens? google,
+    CloudTargetFactory? cloudTargets,
   }) : lock = lock ?? AppLock.off(),
+       _cloudStore = cloudStore ?? MemoryCloudSettingsStore(),
+       _google = google,
+       _cloudTargets = cloudTargets,
        files = files ?? DeviceBackupFiles(),
        snapshots = snapshots ?? MemorySnapshotStore(),
        clock = clock ?? DateTime.now;
@@ -87,6 +95,21 @@ class AppState extends ChangeNotifier {
 
   /// PIN / biometric lock in front of the whole app.
   final AppLock lock;
+
+  final CloudSettingsStore _cloudStore;
+  final GoogleTokens? _google;
+  final CloudTargetFactory? _cloudTargets;
+
+  /// Automatic encrypted backups to the user's cloud storage.
+  late final cloud = CloudBackup(
+    store: _cloudStore,
+    google: _google,
+    targets: _cloudTargets,
+    encode: (password) => _encodeCurrent(password: password),
+    restore: (bytes, password) => restoreBackup(bytes, password: password),
+    hasData: () => ledger.count() > 0,
+    clock: clock,
+  );
   final BackupFiles files;
   final SnapshotStore snapshots;
 
@@ -204,6 +227,7 @@ class AppState extends ChangeNotifier {
   late final assistant = AssistantSession(this);
 
   Future<void> load() async {
+    await cloud.load();
     aiConfig = await settings.loadConfig();
     _apiKey = await settings.loadApiKey(aiConfig.preset);
     notifyListeners();
@@ -281,11 +305,11 @@ class AppState extends ChangeNotifier {
   };
 
   /// Whether to nudge the user to back up: data exists and there is no
-  /// backup file from the last 30 days.
+  /// backup file or cloud backup from the last 30 days.
   bool get backupOverdue {
     if (ledger.count() == 0) return false;
-    final last = lastBackupAt;
-    return last == null || clock().difference(last).inDays >= 30;
+    final times = [?lastBackupAt, ?cloud.config.lastSuccess];
+    return times.isEmpty || times.every((t) => clock().difference(t).inDays >= 30);
   }
 
   Future<Uint8List> _encodeCurrent({String? password}) => compute(_encode, (
