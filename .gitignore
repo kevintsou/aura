@@ -1,0 +1,6 @@
+# Real CWMoney exports contain personal financial data and e-invoice carrier IDs.
+# Keep them local only; commit anonymized fixtures under test/fixtures/ instead.
+samples/private/
+*.sdb
+*.idb
+cwmoney_*_db_CSV_*
