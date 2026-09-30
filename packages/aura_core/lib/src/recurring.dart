@@ -144,7 +144,7 @@ RecurringRun recordDueRecurring(LedgerStore ledger, {required DateTime today}) {
         ledger.addTxn(txn);
         recorded.add(txn);
       }
-      ledger.setRecurring(r.withNext(r.firstFrom(day.add(const Duration(days: 1)))));
+      ledger.setRecurring(r.withNext(r.firstFrom(DateTime(day.year, day.month, day.day + 1))));
     } on ArgumentError catch (e) {
       problems[r.id] = '${e.message}';
     }

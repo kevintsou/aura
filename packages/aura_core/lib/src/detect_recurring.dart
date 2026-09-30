@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 
+import 'balance.dart';
 import 'ledger.dart';
 import 'model.dart';
 import 'recurring.dart';
@@ -92,14 +93,14 @@ List<RecurringCandidate> detectRecurring(
     final spread = Decimal.parse('0.15') * median;
     if (amounts.where((a) => (a - median).abs() <= spread).length * 5 < amounts.length * 4) continue;
 
-    final gaps = [for (var i = 1; i < txns.length; i++) txns[i].date.difference(txns[i - 1].date).inDays];
+    final gaps = [for (var i = 1; i < txns.length; i++) daysBetween(txns[i - 1].date, txns[i].date)];
     final unit = _unitOf(gaps, txns);
     if (unit == null || (unit != RepeatUnit.year && txns.length < 3)) continue;
     final last = txns.last;
     var next = _after(last.date, unit);
     // Still going: the next one is not overdue by more than half a period.
-    final period = next.difference(last.date).inDays;
-    if (day.difference(next).inDays > period ~/ 2) continue;
+    final period = daysBetween(last.date, next);
+    if (daysBetween(next, day) > period ~/ 2) continue;
     while (!next.isAfter(day)) {
       next = _after(next, unit);
     }

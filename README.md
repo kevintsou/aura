@@ -86,7 +86,7 @@ OPENAI_API_KEY=sk-... dart run bin/eval.dart --model gpt-6-sol
 
 ## 隱私
 
-- 帳本存在 App 私有目錄的 `aura.db`（SQLite），不會上傳。網頁版只把資料放在記憶體裡，不會保存。
+- 帳本存在 App 私有目錄的 `aura.db`（SQLite），Aura 自己不會上傳。手機系統的整機備份（Android 的 Google 備份、iCloud 備份）會像其他 App 的資料一樣把它一起備份；API 金鑰、App 鎖 PIN 和雲端備份密碼存在 Keychain／Keystore，換手機後要重新設定。網頁版只把資料放在記憶體裡，不會保存。
 - API 金鑰只存在手機的 Keychain／Keystore。
 - 送給 AI 的只有你的問題，以及工具查詢的結果。手機條碼載具號碼和賣方統編一律不送；卡號、帳號這類長串數字會遮蔽。
 - 每一次查詢送出的內容，都可以在對話裡點開檢查。

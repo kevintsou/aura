@@ -144,3 +144,9 @@ Map<String, AccountBalance> computeBalances(
 }
 
 DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+/// Calendar days from [from] to [to] (negative when [to] is earlier).
+/// Counted on the dates alone: a day with a daylight-saving change is
+/// 23 or 25 hours long, which `difference().inDays` gets wrong.
+int daysBetween(DateTime from, DateTime to) =>
+    DateTime.utc(to.year, to.month, to.day).difference(DateTime.utc(from.year, from.month, from.day)).inDays;

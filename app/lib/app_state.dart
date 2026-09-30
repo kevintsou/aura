@@ -699,7 +699,7 @@ class AppState extends ChangeNotifier {
       final start = first[a.id];
       final covered =
           start == null ||
-          !anchor.date.isBefore(start.subtract(const Duration(days: 1)));
+          !anchor.date.isBefore(DateTime(start.year, start.month, start.day - 1));
       if (covered) {
         imported.setBalanceAnchor(a.id, anchor);
         kept.add(a.name);

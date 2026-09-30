@@ -79,7 +79,7 @@ class _MergeDialogState extends State<_MergeDialog> {
     final theme = Theme.of(context);
     final fileCount = preview.result.ledger.count();
     final from = plan.from, latest = plan.latestExisting;
-    final gap = from != null && latest != null ? from.difference(latest).inDays : 0;
+    final gap = from != null && latest != null ? daysBetween(latest, from) : 0;
     final duplicates = [
       for (final t in plan.newTxns)
         if (plan.possibleDuplicates.contains(t.id)) t,

@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 
+import 'balance.dart';
 import 'budget.dart';
 import 'ledger.dart';
 import 'model.dart';
@@ -43,7 +44,7 @@ List<List<Txn>> possibleDuplicates(LedgerReader ledger, Period p, {Set<String> d
     final label = _label(a);
     if (label == null) continue;
     for (final b in txns.skip(i + 1)) {
-      final apart = _day(a.date).difference(_day(b.date)).inDays;
+      final apart = daysBetween(b.date, a.date);
       if (apart > 2) break; // newest first
       if (b.recurringId != null || used.contains(b.id)) continue;
       if (b.accountId != a.accountId || b.baseAmount != a.baseAmount || _label(b) != label) continue;
@@ -149,7 +150,7 @@ List<Insight> monthlyInsights(
   // Unusually large: three times the category's usual, the most in a
   // year, and at least 1,000.
   final history = ledger.transactions(
-    TxnFilter(from: DateTime(month.from.year - 1, month.from.month), to: month.from.subtract(const Duration(days: 1)), kinds: const {TxnKind.expense}),
+    TxnFilter(from: DateTime(month.from.year - 1, month.from.month), to: DateTime(month.from.year, month.from.month, month.from.day - 1), kinds: const {TxnKind.expense}),
   );
   final usual = <String, List<Decimal>>{};
   for (final t in history) {

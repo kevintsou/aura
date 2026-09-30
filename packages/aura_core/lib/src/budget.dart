@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 
+import 'balance.dart';
 import 'ledger.dart';
 import 'model.dart';
 import 'reports.dart';
@@ -52,7 +53,7 @@ class BudgetStatus {
 /// Every budget's standing in [month], the total first.
 List<BudgetStatus> budgetStatuses(LedgerReader ledger, Period month, {required DateTime today}) {
   final day = DateTime(today.year, today.month, today.day);
-  final days = month.to.difference(month.from).inDays + 1;
+  final days = daysBetween(month.from, month.to) + 1;
   final double elapsed;
   final int daysLeft;
   if (day.isAfter(month.to)) {
@@ -60,7 +61,7 @@ List<BudgetStatus> budgetStatuses(LedgerReader ledger, Period month, {required D
   } else if (day.isBefore(month.from)) {
     (elapsed, daysLeft) = (0, 0);
   } else {
-    final gone = day.difference(month.from).inDays + 1;
+    final gone = daysBetween(month.from, day) + 1;
     (elapsed, daysLeft) = (gone / days, days - gone + 1);
   }
   final order = {for (final (i, c) in ledger.categories.indexed) c.id: i};

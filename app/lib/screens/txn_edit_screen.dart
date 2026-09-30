@@ -343,7 +343,8 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     if (old == null || old.next == old.start) {
       resume = draft.start;
     } else {
-      resume = old.next ?? dateOnly(_app.clock()).add(const Duration(days: 1));
+      final today = _app.clock();
+      resume = old.next ?? DateTime(today.year, today.month, today.day + 1);
     }
     return (draft.withNext(draft.firstFrom(resume)), null);
   }

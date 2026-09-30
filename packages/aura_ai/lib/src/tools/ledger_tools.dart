@@ -399,7 +399,7 @@ class _Ctx {
     'seller' => t.invoice?.sellerName ?? t.place ?? '(無商家資訊)',
     'year' => '${t.date.year}',
     'month' => _fmtDate(t.date).substring(0, 7),
-    'week' => _fmtDate(t.date.subtract(Duration(days: t.date.weekday - 1))),
+    'week' => _fmtDate(DateTime(t.date.year, t.date.month, t.date.day - (t.date.weekday - 1))),
     _ => _fmtDate(t.date),
   };
 

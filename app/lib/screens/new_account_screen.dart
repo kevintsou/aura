@@ -58,7 +58,7 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
           ? null
           : BalanceAnchor(
               amount: amount,
-              date: dateOnly(widget.app.clock()).subtract(const Duration(days: 1)),
+              date: DateTime(widget.app.clock().year, widget.app.clock().month, widget.app.clock().day - 1),
             ),
     );
     final error = widget.app.write((l) => l.addAccount(account));
