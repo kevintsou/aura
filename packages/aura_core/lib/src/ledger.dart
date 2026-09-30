@@ -189,6 +189,11 @@ class InMemoryLedger implements LedgerStore {
   Map<String, Photo> _photos = {};
   final Map<String, String> _meta = {};
 
+  /// Order records were added in: the tie-breaker for ordering, kept when
+  /// a record is edited (like SQLite's seq).
+  final Map<String, int> _seq = {};
+  var _nextSeq = 0;
+
   void _load(
     List<Account> accounts,
     List<Category> categories,
@@ -198,17 +203,20 @@ class InMemoryLedger implements LedgerStore {
     _accounts = {for (final a in accounts) a.id: a};
     _categories = {for (final c in categories) c.id: c};
     _projects = {for (final p in projects) p.id: p};
-    // List.sort is not stable; the index keeps ties in insertion order.
-    final indexed = [...transactions.indexed]
+    for (final t in transactions) {
+      _seq.putIfAbsent(t.id, () => _nextSeq++);
+    }
+    // List.sort is not stable; the sequence keeps ties in insertion order.
+    _txns = [...transactions]
       ..sort((a, b) {
-        final c = _newestFirst(a.$2, b.$2);
-        return c != 0 ? c : a.$1.compareTo(b.$1);
+        final c = _newestFirst(a, b);
+        return c != 0 ? c : _seq[a.id]!.compareTo(_seq[b.id]!);
       });
-    _txns = [for (final (_, t) in indexed) t];
   }
 
   @override
   void replaceAll(LedgerReader source) {
+    _seq.clear();
     _load(
       source.accounts,
       source.categories,
@@ -402,6 +410,7 @@ class InMemoryLedger implements LedgerStore {
       for (final t in _txns)
         if (t.id != txnId) t.feeOfTxnId == txnId ? t.withoutFeeLink() : t,
     ];
+    _seq.remove(txnId);
     _photos.removeWhere((_, p) => p.txnId == txnId);
   }
 
