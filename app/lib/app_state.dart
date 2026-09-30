@@ -63,9 +63,9 @@ Future<CwmExportResult> _exportCwm(
 Future<BackupContents> _decode(({List<int> bytes, String? password}) job) =>
     decodeBackup(job.bytes, password: job.password);
 
-(CwmImportResult, CwmMergePlan) _readAndPlan(({List<int> bytes, InMemoryLedger current}) job) {
+(CwmImportResult, CwmMergePlan) _readAndPlan(({List<int> bytes, InMemoryLedger current, Set<String> deleted}) job) {
   final result = importCwmoneyCsv(job.bytes);
-  return (result, planCwmoneyMerge(job.current, result.ledger));
+  return (result, planCwmoneyMerge(job.current, result.ledger, deletedRows: job.deleted));
 }
 
 /// A CWMoney export that has been read and compared with the ledger,
@@ -361,7 +361,7 @@ class AppState extends ChangeNotifier {
   /// Reads a CWMoney export and works out what merging it would add,
   /// without changing anything. Throws [CwmFormatException].
   Future<CwmImportPreview> previewCwmoney(List<int> bytes, String fileName) async {
-    final (result, plan) = await compute(_readAndPlan, (bytes: bytes, current: _detached(ledger)));
+    final (result, plan) = await compute(_readAndPlan, (bytes: bytes, current: _detached(ledger), deleted: _deletedRows));
     return CwmImportPreview(fileName, result, plan);
   }
 
@@ -381,6 +381,24 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  static const _metaDeletedRows = 'import.deletedRows';
+
+  /// CWMoney rows of imported records the user deleted, so merging an
+  /// overlapping export does not bring them back.
+  Set<String> get _deletedRows => switch (ledger.meta(_metaDeletedRows)) {
+    final String s => {...(jsonDecode(s) as List).cast<String>()},
+    _ => {},
+  };
+
+  /// Deletes a record, remembering its CWMoney rows (see [_deletedRows]).
+  String? deleteTxn(String txnId) => write((l) {
+    final rows = l.txn(txnId)?.legacyRows ?? const [];
+    l.deleteTxn(txnId);
+    if (rows.isNotEmpty) {
+      l.setMeta(_metaDeletedRows, jsonEncode([..._deletedRows, for (final r in rows) cwmRowKey(r)]));
+    }
+  });
+
   Future<String?> _replaceWith(CwmImportResult result, String fileName) async {
     _carryOverAccountDetails(result.ledger);
     final (kept, dropped) = _carryOverAnchors(result.ledger);
@@ -392,6 +410,8 @@ class AppState extends ChangeNotifier {
     } on Exception catch (e) {
       return '寫入資料庫失敗：$e';
     }
+    // The file is taken as it is now: forget what was deleted before.
+    ledger.setMeta(_metaDeletedRows, null);
     _importDone(fileName, result.report, kept, dropped);
     budgetsDropped = droppedBudgets;
     recurringDropped = droppedRecurring;

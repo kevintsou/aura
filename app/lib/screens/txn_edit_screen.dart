@@ -404,7 +404,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     if (!await confirm(context, title: '刪除這筆紀錄？', action: '刪除') || !mounted) {
       return;
     }
-    final error = _app.write((l) => l.deleteTxn(_old!.id));
+    final error = _app.deleteTxn(_old!.id);
     if (error != null) {
       setState(() => _error = error);
     } else {

@@ -18,6 +18,7 @@ class CwmMergePlan {
     required this.alreadyPresent,
     required this.possibleDuplicates,
     required this.latestExisting,
+    required this.deletedBefore,
   });
 
   /// Accounts, categories and projects the added records need, matched
@@ -43,6 +44,9 @@ class CwmMergePlan {
 
   /// Date of the newest record in the ledger before merging.
   final DateTime? latestExisting;
+
+  /// Records of the file the user had deleted in Aura; not added again.
+  final int deletedBefore;
 
   bool get isEmpty => newTxns.isEmpty && completedTransfers.isEmpty;
 
@@ -77,20 +81,26 @@ class CwmMergePlan {
 }
 
 /// Works out how to merge [imported] (a fresh CWMoney import) into
-/// [current] without duplicating records imported before.
-CwmMergePlan planCwmoneyMerge(LedgerReader current, LedgerReader imported) =>
-    _Merger(current, imported).run();
+/// [current] without duplicating records imported before. [deletedRows]
+/// are the [cwmRowKey]s of imported records the user deleted since: an
+/// overlapping file must not bring them back.
+CwmMergePlan planCwmoneyMerge(LedgerReader current, LedgerReader imported, {Set<String> deletedRows = const {}}) =>
+    _Merger(current, imported, deletedRows).run();
 
-String _rowKey(List<String> row) => row.join('\u001f');
+/// Identifies one raw CWMoney row.
+String cwmRowKey(List<String> row) => row.join('\u001f');
+
+String _rowKey(List<String> row) => cwmRowKey(row);
 
 String _lookalikeKey(Txn t) =>
     '${t.kind.name}|${t.date.toIso8601String()}|${t.accountId}|${t.toAccountId}|${t.baseAmount}';
 
 class _Merger {
-  _Merger(this.current, this.imported);
+  _Merger(this.current, this.imported, this.deletedRows);
 
   final LedgerReader current;
   final LedgerReader imported;
+  final Set<String> deletedRows;
 
   final newAccounts = <Account>[];
   final newCategories = <Category>[];
@@ -133,7 +143,7 @@ class _Merger {
     final txnIds = <String, String>{};
     final newTxns = <Txn>[];
     final completed = <Txn>[];
-    var alreadyPresent = 0;
+    var alreadyPresent = 0, deletedBefore = 0;
     // Oldest first, so ids and ties keep the file's order.
     for (final t in imported.transactions().reversed) {
       final keys = [for (final r in t.legacyRows) _rowKey(r)];
@@ -144,6 +154,10 @@ class _Merger {
         }
         txnIds[t.id] = match.id;
         alreadyPresent++;
+        continue;
+      }
+      if (keys.isNotEmpty && keys.every(deletedRows.contains)) {
+        deletedBefore++;
         continue;
       }
       // A transfer that was imported with one side only: the new file has
@@ -186,6 +200,7 @@ class _Merger {
       alreadyPresent: alreadyPresent,
       possibleDuplicates: possibleDuplicates,
       latestExisting: existing.firstOrNull?.date,
+      deletedBefore: deletedBefore,
     );
   }
 

@@ -181,6 +181,11 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
         return;
       } on BackupException catch (e) {
         if (!mounted) return;
+        if (!e.passwordProblem) {
+          // A damaged file: another password would not help.
+          await _tell('無法還原', e.message);
+          return;
+        }
         // A backup made before the password was changed.
         password = await askText(
           context,

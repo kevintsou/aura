@@ -41,6 +41,20 @@ void main() {
     expect(_import(_all).count(), importCwmoneyCsv(_bytes).ledger.count());
   });
 
+  test('records deleted in Aura do not come back', () {
+    final current = _import(_all);
+    final lunch = _only(current, (t) => t.note == '便當');
+    final transfer = _only(current, (t) => t.kind == TxnKind.transfer && t.note == '轉定存');
+    final deleted = {for (final t in [lunch, transfer]) for (final r in t.legacyRows) cwmRowKey(r)};
+    current
+      ..deleteTxn(lunch.id)
+      ..deleteTxn(transfer.id);
+    final plan = planCwmoneyMerge(current, _import(_all), deletedRows: deleted);
+    expect((plan.isEmpty, plan.deletedBefore, plan.alreadyPresent), (true, 2, current.count()));
+    // Without the list they would be added again.
+    expect(planCwmoneyMerge(current, _import(_all)).newTxns, hasLength(2));
+  });
+
   test('merging the same file again adds nothing', () {
     final current = _import(_all);
     final plan = planCwmoneyMerge(current, _import(_all));

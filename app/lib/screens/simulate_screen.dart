@@ -93,11 +93,14 @@ class _SimulateScreenState extends State<SimulateScreen> {
       action: '設定',
     );
     if (!ok || !mounted) return;
+    var set = 0;
+    final problems = <String>[];
     for (final (id, amount) in plan) {
       final existing = _app.ledger.budgets.where((b) => b.categoryId == id).firstOrNull;
-      _app.setBudget(Budget(id: existing?.id ?? newId('b'), amount: amount, categoryId: id));
+      final error = _app.setBudget(Budget(id: existing?.id ?? newId('b'), amount: amount, categoryId: id));
+      error == null ? set++ : problems.add('${categoryLabel(_l, id)}：$error');
     }
-    showMessage(context, '已設定 ${plan.length} 個預算');
+    showMessage(context, ['已設定 $set 個預算', ...problems].join('\n'));
   }
 
   void _askAi(SimulationResult r) {

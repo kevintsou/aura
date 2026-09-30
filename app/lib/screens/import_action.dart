@@ -90,6 +90,7 @@ class _MergeDialogState extends State<_MergeDialog> {
         '新紀錄 ${plan.newTxns.length} 筆（${formatDate(plan.from!)}–${formatDate(plan.to!)}）',
       if (plan.completedTransfers.isNotEmpty) '補上 ${plan.completedTransfers.length} 筆轉帳缺少的另一邊',
       if (!plan.isEmpty && plan.alreadyPresent > 0) '已經在帳本裡的 ${plan.alreadyPresent} 筆會略過',
+      if (plan.deletedBefore > 0) '你在 Aura 刪掉的 ${plan.deletedBefore} 筆不會再加回來',
       if (plan.newAccounts.isNotEmpty) '新增帳戶：${plan.newAccounts.map((a) => a.name).join('、')}',
       if (plan.newCategories.isNotEmpty) '新增分類 ${plan.newCategories.length} 個',
       if (plan.newProjects.isNotEmpty) '新增專案 ${plan.newProjects.length} 個',
@@ -187,6 +188,7 @@ Future<void> _showMerged(BuildContext context, CwmImportPreview preview, bool sk
     '已加入 ${plan.newTxns.length - dropped} 筆新紀錄',
     if (plan.completedTransfers.isNotEmpty) '補上 ${plan.completedTransfers.length} 筆轉帳缺少的另一邊',
     if (plan.alreadyPresent > 0) '略過已經有的 ${plan.alreadyPresent} 筆',
+    if (plan.deletedBefore > 0) '略過你刪掉的 ${plan.deletedBefore} 筆',
     if (dropped > 0) '略過可能重複的 $dropped 筆',
     if (plan.newAccounts.isNotEmpty)
       '\n新帳戶 ${plan.newAccounts.map((a) => a.name).join('、')} 還沒有餘額，請到「帳戶」輸入目前的實際餘額。',

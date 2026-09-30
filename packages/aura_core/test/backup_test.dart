@@ -128,11 +128,19 @@ void main() {
     final bytes = await encodeBackup(ledger, createdAt: created, password: 'pw', iterations: 1000);
     await expectLater(
       decodeBackup(bytes, password: 'nope'),
-      throwsA(isA<BackupException>().having((e) => e.message, 'message', '密碼錯誤')),
+      throwsA(
+        isA<BackupException>()
+            .having((e) => e.message, 'message', '密碼錯誤')
+            .having((e) => e.passwordProblem, 'passwordProblem', isTrue),
+      ),
     );
     await expectLater(
       decodeBackup(bytes),
-      throwsA(isA<BackupException>().having((e) => e.message, 'message', contains('密碼'))),
+      throwsA(
+        isA<BackupException>()
+            .having((e) => e.message, 'message', contains('密碼'))
+            .having((e) => e.passwordProblem, 'passwordProblem', isTrue),
+      ),
     );
   });
 
@@ -178,7 +186,11 @@ void main() {
     );
     await expectLater(
       decodeBackup(await encodeBackup(twins, createdAt: created)),
-      throwsA(isA<BackupException>().having((e) => e.message, 'm', contains('帳戶名稱重複'))),
+      throwsA(
+        isA<BackupException>()
+            .having((e) => e.message, 'm', contains('帳戶名稱重複'))
+            .having((e) => e.passwordProblem, 'passwordProblem', isFalse),
+      ),
     );
   });
 

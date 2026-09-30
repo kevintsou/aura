@@ -244,4 +244,48 @@ void main() {
     await tap(find.byType(BackButton));
     expect(find.text('上次雲端備份：2026/09/29 21:30'), findsOneWidget);
   });
+
+  testWidgets('a damaged cloud backup is explained once, not asked a password for', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final cloud = _FakeCloud();
+    final app = _phone(cloud);
+    // Two accounts with one name: readable, but not restorable.
+    final twins = InMemoryLedger(
+      accounts: const [
+        Account(id: 'a', name: '現金', type: AccountType.cash, currency: 'TWD'),
+        Account(id: 'b', name: '現金', type: AccountType.cash, currency: 'TWD'),
+      ],
+    );
+    await tester.runAsync(() async {
+      await app.load();
+      await app.importCwmoney(_sample, 'a.csv');
+      await app.cloud.enable(_webdav, backupPassword: 'long enough');
+      cloud.files['aura-20260929-080000.aura'] = await encodeBackup(twins, createdAt: DateTime(2026, 9, 29, 8));
+    });
+    await tester.pumpWidget(AuraApp(app: app));
+    Future<void> settle() async {
+      for (var i = 0; i < 40; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 25)));
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.text('設定'));
+    await settle();
+    await tester.tap(find.text('備份與還原'));
+    await settle();
+    await tester.tap(find.byKey(const Key('openCloudBackup')));
+    await settle();
+    await tester.tap(find.byKey(const Key('cloudRestore-aura-20260929-080000.aura')));
+    await settle();
+    await tester.tap(find.byKey(const Key('confirmOk')));
+    await settle();
+    expect(find.text('無法還原'), findsOneWidget);
+    expect(find.textContaining('帳戶名稱重複'), findsOneWidget);
+    expect(find.text('需要這份備份的密碼'), findsNothing);
+    expect(app.ledger.count(), 11, reason: 'nothing changed');
+  });
 }

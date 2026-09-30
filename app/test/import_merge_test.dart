@@ -127,6 +127,20 @@ void main() {
     expect(app.ledger.count(), 11);
   });
 
+  testWidgets('a record deleted in Aura is not merged back in', (tester) async {
+    final (app, files) = await _open(tester);
+    await _import(tester, files, _sample, '匯入完成');
+    await _tap(tester, find.text('好'));
+    final lunch = app.ledger.transactions().firstWhere((t) => t.note == '便當');
+    expect(app.deleteTxn(lunch.id), isNull);
+    expect(app.ledger.count(), 10);
+
+    await _import(tester, files, _sample, '沒有新紀錄');
+    expect(_summary(tester), contains('你在 Aura 刪掉的 1 筆不會再加回來'));
+    await _tap(tester, find.text('取消'));
+    expect(app.ledger.count(), 10);
+  });
+
   testWidgets('can replace everything instead of merging', (tester) async {
     final (app, files) = await _open(
       tester,

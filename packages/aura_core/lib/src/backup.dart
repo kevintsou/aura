@@ -34,10 +34,14 @@ const backupExtension = 'aura';
 const backupKdfIterations = 300000;
 
 class BackupException implements Exception {
-  BackupException(this.message);
+  BackupException(this.message, {this.passwordProblem = false});
 
   /// Shown to users.
   final String message;
+
+  /// The password is missing or wrong (asking again can help); otherwise
+  /// the file itself is the problem.
+  final bool passwordProblem;
   @override
   String toString() => 'BackupException: $message';
 }
@@ -166,7 +170,7 @@ Future<BackupContents> decodeBackup(List<int> bytes, {String? password}) async {
     data = envelope['data'];
   } else {
     if (password == null || password.isEmpty) {
-      throw BackupException('這個備份檔有密碼保護，請輸入密碼');
+      throw BackupException('這個備份檔有密碼保護，請輸入密碼', passwordProblem: true);
     }
     try {
       final enc = envelope['encryption'] as Map<String, Object?>;
@@ -191,7 +195,7 @@ Future<BackupContents> decodeBackup(List<int> bytes, {String? password}) async {
         ),
       );
     } on SecretBoxAuthenticationError {
-      throw BackupException('密碼錯誤');
+      throw BackupException('密碼錯誤', passwordProblem: true);
     } on BackupException {
       rethrow;
     } catch (_) {
