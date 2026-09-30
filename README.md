@@ -42,6 +42,7 @@ docs/
   cloud-backup.md       雲端備份：運作方式、WebDAV、Google 雲端硬碟的 OAuth 設定
   cwmoney-format.md     CWMoney 匯出格式規格（逆向分析）
   ai-agent-api.md       接自己的 AI Agent：協定與工具規格
+  ai-eval.md            AI 評測集：比較不同模型答對多少
 ```
 
 ## 開發
@@ -71,6 +72,13 @@ python3 examples/mock_agent.py 8766
 在 App 裡：**設定 → AI 連線 → 自訂 Agent API**，網址填 `http://localhost:8766/v1`（Android 模擬器填 `http://10.0.2.2:8766/v1`），模型填 `mock-agent`。然後匯入 `packages/aura_core/test/fixtures/sample_cwmoney.csv`，到「AI 助理」提問。
 
 要用真正的 AI，選 **OpenAI** 並填入你的 API 金鑰即可。
+
+想比較不同模型答得準不準，可以跑評測集（見 [`docs/ai-eval.md`](docs/ai-eval.md)）：
+
+```bash
+cd packages/aura_ai
+OPENAI_API_KEY=sk-... dart run bin/eval.dart --model gpt-6-sol
+```
 
 ## 授權
 
