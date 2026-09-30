@@ -189,7 +189,16 @@ class AppLock extends ChangeNotifier {
   }
 
   /// Checks [pin] without unlocking (e.g. before turning the lock off).
-  Future<UnlockResult> check(String pin) async {
+  /// Checks run one at a time, so every wrong PIN is counted.
+  Future<UnlockResult> check(String pin) {
+    final result = _queue.then((_) => _check(pin));
+    _queue = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
+  Future<void> _queue = Future.value();
+
+  Future<UnlockResult> _check(String pin) async {
     final s = _settings;
     if (s == null) return const Unlocked();
     if (waitUntil case final until?) return MustWait(until);

@@ -50,6 +50,15 @@ void main() {
       expect(() => next.setPin('123'), throwsArgumentError);
     });
 
+    test('wrong PINs tried at the same time are all counted', () async {
+      final lock = _lock(MemoryLockStore());
+      await lock.setPin('2468');
+      final results = await Future.wait([for (var i = 0; i < 6; i++) lock.unlock('0000')]);
+      expect([for (final r in results.take(4)) (r as WrongPin).triesBeforeWait], [4, 3, 2, 1]);
+      expect(results.skip(4), everyElement(isA<MustWait>()), reason: 'the fifth starts the wait');
+      expect(await lock.unlock('2468'), isA<MustWait>(), reason: 'still waiting');
+    });
+
     test('wrong PINs lead to growing waits that survive a restart', () async {
       final store = MemoryLockStore();
       final lock = _lock(store);

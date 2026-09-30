@@ -269,15 +269,22 @@ class _PinEntryState extends State<PinEntry> {
   }
 
   Future<void> _submit() async {
+    if (_busy) return;
     setState(() => _busy = true);
-    final error = await widget.onSubmit(_pin);
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _pin = '';
-      _error = error;
-    });
-    _tickIfWaiting();
+    String? error;
+    try {
+      error = await widget.onSubmit(_pin);
+    } finally {
+      // Never leave the keypad dead, whatever happened.
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _pin = '';
+          _error = error;
+        });
+        _tickIfWaiting();
+      }
+    }
   }
 
   KeyEventResult _onKey(FocusNode _, KeyEvent e) {
@@ -291,7 +298,7 @@ class _PinEntryState extends State<PinEntry> {
       _backspace();
       return KeyEventResult.handled;
     }
-    if (e.logicalKey == LogicalKeyboardKey.enter && widget.length == null && AppLock.validPin(_pin)) {
+    if (e.logicalKey == LogicalKeyboardKey.enter && !_disabled && widget.length == null && AppLock.validPin(_pin)) {
       _submit();
       return KeyEventResult.handled;
     }
