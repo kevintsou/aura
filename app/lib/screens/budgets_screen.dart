@@ -10,6 +10,7 @@ import 'category_picker.dart';
 import 'category_report_screen.dart';
 import 'dialogs.dart';
 import 'reports_screen.dart';
+import 'simulate_screen.dart';
 import 'transactions_screen.dart';
 
 String _monthLabel(Period p) => '${p.from.year} 年 ${p.from.month} 月';
@@ -49,7 +50,20 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
       final statuses = budgetStatuses(_app.view, _month, today: _app.clock());
       final hasTotal = statuses.any((s) => s.category == null);
       return Scaffold(
-        appBar: AppBar(title: const Text('預算')),
+        appBar: AppBar(
+          title: const Text('預算'),
+          actions: [
+            TextButton.icon(
+              key: const Key('openSimulation'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => SimulateScreen(app: _app)),
+              ),
+              icon: const Icon(Icons.calculate_outlined),
+              label: const Text('省錢試算'),
+            ),
+          ],
+        ),
         floatingActionButton: FloatingActionButton.extended(
           heroTag: null,
           key: const Key('addBudget'),

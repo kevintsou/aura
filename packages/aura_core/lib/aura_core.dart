@@ -17,3 +17,4 @@ export 'src/ledger.dart';
 export 'src/model.dart';
 export 'src/recurring.dart';
 export 'src/reports.dart';
+export 'src/simulate.dart';
