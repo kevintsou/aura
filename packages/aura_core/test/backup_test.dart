@@ -169,6 +169,19 @@ void main() {
     );
   });
 
+  test('rejects two accounts with the same name (the database cannot hold them)', () async {
+    final twins = InMemoryLedger(
+      accounts: const [
+        Account(id: 'a', name: '現金', type: AccountType.cash, currency: 'TWD'),
+        Account(id: 'b', name: '現金', type: AccountType.cash, currency: 'TWD'),
+      ],
+    );
+    await expectLater(
+      decodeBackup(await encodeBackup(twins, createdAt: created)),
+      throwsA(isA<BackupException>().having((e) => e.message, 'm', contains('帳戶名稱重複'))),
+    );
+  });
+
   test('restores accounts that newer rules would reject', () async {
     final old = InMemoryLedger(
       accounts: const [Account(id: 'a', name: '', type: AccountType.other, currency: 'TWD')],

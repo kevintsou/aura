@@ -329,6 +329,44 @@ void ledgerStoreContract(LedgerStore Function() create) {
       next: DateTime(2026, 9, 5),
     );
 
+    test('repeats only what fits every occurrence', () {
+      final source = expense('src', date: DateTime(2026, 8, 5));
+      l.setRecurring(
+        Recurring(
+          id: 'r1',
+          template: Txn(
+            id: 'r1',
+            kind: TxnKind.expense,
+            date: DateTime(2026, 9, 5),
+            accountId: source.accountId,
+            categoryId: source.categoryId,
+            amount: source.amount,
+            baseAmount: source.baseAmount,
+            note: '房租',
+            place: '房東家',
+            location: const GeoPoint(25, 121),
+            createdAt: DateTime(2026, 8, 5, 9),
+            invoice: const Invoice(number: 'AB12345678'),
+            needsReview: true,
+            legacyRows: const [
+              ['2026/08/05'],
+            ],
+          ),
+          unit: RepeatUnit.month,
+          next: DateTime(2026, 9, 5),
+        ),
+      );
+      final t = l.recurrings.single.template;
+      expect((t.note, t.amount, t.accountId), ('房租', source.amount, source.accountId));
+      expect([t.place, t.location, t.invoice, t.createdAt], everyElement(isNull));
+      expect(t.needsReview, isFalse);
+      expect(t.legacyRows, isEmpty);
+      recordDueRecurring(l, today: DateTime(2026, 9, 5));
+      final made = l.txn('r1@2026-09-05')!;
+      expect((made.invoice, made.note), (null, '房租'));
+      expect(made.legacyRows, isEmpty);
+    });
+
     test('set, change, record and delete', () {
       l
         ..setRecurring(monthly('r1'))

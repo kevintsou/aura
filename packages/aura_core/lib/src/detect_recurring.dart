@@ -41,7 +41,7 @@ class RecurringCandidate {
   /// nothing already recorded is recorded again.
   Recurring toRecurring(String id) => Recurring(
     id: id,
-    template: latest.copyWith(id: id, date: next, recurringId: null, feeOfTxnId: null),
+    template: recurringTemplate(latest, id: id, date: next),
     unit: unit,
     next: next,
   );

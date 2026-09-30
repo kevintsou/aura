@@ -86,6 +86,24 @@ class Recurring {
   );
 }
 
+/// What a recurring item repeats: the parts of [t] that fit every
+/// occurrence. Not its invoice, place, position, creation time or source
+/// rows, which belong to that one record.
+Txn recurringTemplate(Txn t, {required String id, DateTime? date}) => Txn(
+  id: id,
+  kind: t.kind,
+  date: date ?? t.date,
+  accountId: t.accountId,
+  toAccountId: t.toAccountId,
+  amount: t.amount,
+  toAmount: t.toAmount,
+  baseAmount: t.baseAmount,
+  fxRateDisplay: t.fxRateDisplay,
+  categoryId: t.categoryId,
+  projectId: t.projectId,
+  note: t.note,
+);
+
 String occurrenceId(String recurringId, DateTime date) =>
     '$recurringId@${date.year}-${_two(date.month)}-${_two(date.day)}';
 

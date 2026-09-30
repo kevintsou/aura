@@ -176,7 +176,7 @@ class InMemoryLedger implements LedgerStore {
   }) {
     _load(accounts, categories, projects, transactions);
     _budgets = {for (final b in budgets) b.id: b};
-    _recurrings = {for (final r in recurrings) r.id: r};
+    _recurrings = {for (final r in recurrings) r.id: _kept(r)};
     _photos = {for (final p in photos) p.id: p};
   }
 
@@ -216,7 +216,7 @@ class InMemoryLedger implements LedgerStore {
       source.transactions(),
     );
     _budgets = {for (final b in source.budgets) b.id: b};
-    _recurrings = {for (final r in source.recurrings) r.id: r};
+    _recurrings = {for (final r in source.recurrings) r.id: _kept(r)};
     final ids = {for (final t in _txns) t.id};
     _photos = {
       for (final p in source.photos())
@@ -340,7 +340,7 @@ class InMemoryLedger implements LedgerStore {
   @override
   void setRecurring(Recurring recurring) {
     checkRecurring(this, recurring);
-    _recurrings[recurring.id] = recurring;
+    _recurrings[recurring.id] = _kept(recurring);
   }
 
   @override
@@ -417,6 +417,18 @@ class InMemoryLedger implements LedgerStore {
 
   @override
   void close() {}
+
+  /// Keeps of a recurring item what SQLite keeps, so both stores behave
+  /// the same.
+  static Recurring _kept(Recurring r) => Recurring(
+    id: r.id,
+    template: recurringTemplate(r.template, id: r.template.id),
+    unit: r.unit,
+    every: r.every,
+    until: r.until,
+    times: r.times,
+    next: r.next,
+  );
 
   static int _newestFirst(Txn a, Txn b) {
     final byDate = b.date.compareTo(a.date);

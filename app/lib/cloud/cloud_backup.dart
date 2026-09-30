@@ -314,6 +314,12 @@ class CloudBackup extends ChangeNotifier {
     } on CloudException catch (e) {
       await _save(config.copyWith(lastAttempt: now, lastError: e.message));
       rethrow;
+    } on Exception catch (e) {
+      // Anything else (making the backup file, an unexpected error from
+      // a plugin) is recorded the same way, not left unhandled.
+      final message = '備份失敗：$e';
+      await _save(config.copyWith(lastAttempt: now, lastError: message));
+      throw CloudException(message);
     } finally {
       busy = false;
       notifyListeners();

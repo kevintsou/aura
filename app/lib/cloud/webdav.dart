@@ -65,6 +65,9 @@ class WebDavTarget implements CloudTarget {
       throw const CloudException('連線逾時，請檢查網路或伺服器網址');
     } on http.ClientException catch (e) {
       throw CloudException('連不上伺服器：${e.message}');
+    } on Exception catch (e) {
+      // TLS certificate problems and the like.
+      throw CloudException('連不上伺服器：$e');
     }
   }
 

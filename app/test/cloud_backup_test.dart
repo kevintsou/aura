@@ -16,10 +16,14 @@ final _sample = File('../packages/aura_core/test/fixtures/sample_cwmoney.csv').r
 class _FakeCloud implements CloudTarget {
   final files = <String, Uint8List>{};
   String? failWith;
+
+  /// Thrown as is, like a TLS error from the platform.
+  Exception? crashWith;
   final deleted = <String>[];
 
   void _maybeFail() {
     if (failWith case final m?) throw CloudException(m);
+    if (crashWith case final e?) throw e;
   }
 
   @override
@@ -110,6 +114,19 @@ void main() {
     final info = readBackupInfo(cloud.files['aura-20261003-213000.aura']!);
     expect((info.encrypted, info.transactions), (true, 11));
     expect(app.cloud.config.lastFile, 'aura-20261003-213000.aura');
+  });
+
+  test('an unexpected error is recorded too, not left unhandled', () async {
+    final cloud = _FakeCloud();
+    final app = _phone(cloud);
+    await app.load();
+    await app.importCwmoney(_sample, 'a.csv');
+    await app.cloud.enable(_webdav, backupPassword: 'long enough');
+    cloud.crashWith = const HandshakeException('CERTIFICATE_VERIFY_FAILED');
+    await app.cloud.runIfDue();
+    expect(app.cloud.config.lastError, contains('CERTIFICATE_VERIFY_FAILED'));
+    expect(app.cloud.busy, isFalse);
+    await expectLater(app.cloud.backupNow(), throwsA(isA<CloudException>()));
   });
 
   test('runs when due, records failures and waits before retrying', () async {

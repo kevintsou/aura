@@ -236,13 +236,24 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     if (picked != null) setState(() => _date = picked);
   }
 
+  /// Bumped to rebuild the project field, which otherwise keeps showing
+  /// "新增專案…" when adding one is cancelled or fails.
+  var _projectFieldResets = 0;
+
   Future<void> _newProject() async {
     final name = await askText(context, title: '新增專案', label: '專案名稱');
-    if (name == null) return;
+    if (!mounted) return;
+    if (name == null) {
+      setState(() => _projectFieldResets++);
+      return;
+    }
     final project = Project(id: newId('p'), name: name);
     final error = _app.write((l) => l.addProject(project));
     if (error != null) {
-      setState(() => _error = error);
+      setState(() {
+        _error = error;
+        _projectFieldResets++;
+      });
     } else {
       setState(() => _projectId = project.id);
     }
@@ -583,7 +594,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
           const SizedBox(height: 16),
           DropdownButtonFormField<String?>(
             // Rebuilt when a project is added, so it shows the new one.
-            key: ValueKey('txnProject-$_projectId-${_ledger.projects.length}'),
+            key: ValueKey('txnProject-$_projectId-${_ledger.projects.length}-$_projectFieldResets'),
             initialValue: _projectId,
             decoration: const InputDecoration(labelText: '專案', border: OutlineInputBorder()),
             items: [

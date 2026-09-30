@@ -470,7 +470,12 @@ class AppState extends ChangeNotifier {
   Future<BackupInfo> restoreBackup(List<int> bytes, {String? password}) async {
     final contents = await compute(_decode, (bytes: bytes, password: password));
     await takeSnapshot(SnapshotReason.beforeRestore);
-    ledger.replaceAll(contents.ledger);
+    try {
+      ledger.replaceAll(contents.ledger);
+    } on Exception catch (e) {
+      // Nothing was changed: the store rolls back.
+      throw BackupException('無法寫入資料庫，帳本沒有變動：$e');
+    }
     for (final e in contents.meta.entries) {
       if (!e.key.startsWith('backup.')) ledger.setMeta(e.key, e.value);
     }

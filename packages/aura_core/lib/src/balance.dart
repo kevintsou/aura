@@ -90,7 +90,7 @@ class AccountBalance {
         amount: amount,
         date: firstDate == null
             ? dateOnly(today)
-            : firstDate!.subtract(const Duration(days: 1)),
+            : DateTime(firstDate!.year, firstDate!.month, firstDate!.day - 1),
       );
 }
 

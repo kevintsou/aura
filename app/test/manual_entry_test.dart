@@ -175,6 +175,17 @@ void main() {
     expect(app.ledger.project(t.projectId!)!.name, '日本旅遊');
   });
 
+  testWidgets('cancelling a new project leaves the project as it was', (tester) async {
+    await _start(tester);
+    await _tap(tester, find.byKey(const Key('addTxn')));
+    await _tap(tester, find.byType(DropdownButtonFormField<String?>));
+    await _tap(tester, find.text('新增專案…').last);
+    await _tap(tester, find.text('取消'));
+    final field = find.byType(DropdownButtonFormField<String?>);
+    expect(find.descendant(of: field, matching: find.text('新增專案…')), findsNothing);
+    expect(find.descendant(of: field, matching: find.text('無')), findsOneWidget);
+  });
+
   testWidgets('accounts can be renamed, archived and deleted', (tester) async {
     final app = await _start(tester);
     await _addAccount(tester, '舊帳戶');

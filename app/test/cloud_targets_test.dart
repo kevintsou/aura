@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:aura/cloud/cloud_target.dart';
@@ -178,6 +179,20 @@ void main() {
       expect(WebDavTarget.checkUrl('http://192.168.1.20:5005/dav'), isNull, reason: 'a NAS at home');
       expect(WebDavTarget.checkUrl('cloud.example.com'), isNotNull);
       expect(WebDavTarget.checkUrl('https://cloud.example.com/remote.php/dav/files/me'), isNull);
+    });
+
+    test('a TLS error becomes a message too', () async {
+      final t = WebDavTarget(
+        url: 'https://cloud.example.com/dav/me',
+        username: 'me',
+        password: 'secret',
+        folder: 'Aura',
+        client: MockClient((_) async => throw const HandshakeException('CERTIFICATE_VERIFY_FAILED')),
+      );
+      await expectLater(
+        t.list(),
+        throwsA(isA<CloudException>().having((e) => e.message, 'message', contains('連不上伺服器'))),
+      );
     });
   });
 

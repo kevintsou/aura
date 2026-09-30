@@ -117,6 +117,9 @@ class GoogleDriveTarget implements CloudTarget {
       throw const CloudException('連線逾時，請檢查網路');
     } on http.ClientException catch (e) {
       throw CloudException('連不上 Google 雲端硬碟：${e.message}');
+    } on Exception catch (e) {
+      // TLS certificate problems and the like.
+      throw CloudException('連不上 Google 雲端硬碟：$e');
     }
     if (r.statusCode == 401 && !retried) {
       await tokens.discard(token);

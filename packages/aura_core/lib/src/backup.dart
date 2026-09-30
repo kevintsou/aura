@@ -308,6 +308,7 @@ BackupInfo _info(Map<String, Object?> envelope) {
   }
 
   unique('帳戶', accounts.map((a) => a.id));
+  unique('帳戶名稱', accounts.map((a) => a.name));
   unique('分類', categories.map((c) => c.id));
   unique('專案', projects.map((p) => p.id));
   unique('紀錄', txns.map((t) => t.id));
