@@ -4,6 +4,7 @@ library;
 
 export 'src/agent.dart';
 export 'src/ai_client.dart';
+export 'src/categorize.dart';
 export 'src/config.dart';
 export 'src/messages.dart';
 export 'src/prompts.dart';

@@ -49,15 +49,20 @@ Future<void> openScannedInvoice(BuildContext context, AppState app, String left,
     showMessage(context, '請先新增一個帳戶');
     return;
   }
-  final categoryId =
-      suggestCategory(l, sellerTaxId: qr.sellerTaxId, sellerName: sellerName, items: [for (final i in qr.items) i.name]) ??
-      defaultCategoryId(l, TxnKind.expense, app.lastCategoryId(TxnKind.expense));
+  final guessed = suggestCategory(
+    l,
+    sellerTaxId: qr.sellerTaxId,
+    sellerName: sellerName,
+    items: [for (final i in qr.items) i.name],
+  );
+  final categoryId = guessed ?? defaultCategoryId(l, TxnKind.expense, app.lastCategoryId(TxnKind.expense));
   final total = Decimal.fromInt(qr.total);
   await Navigator.push(
     context,
     MaterialPageRoute(
       builder: (_) => TxnEditScreen(
         app: app,
+        categoryGuessed: guessed != null,
         draft: Txn(
           id: newId('t'),
           kind: TxnKind.expense,

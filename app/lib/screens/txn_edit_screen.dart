@@ -13,7 +13,15 @@ import 'dialogs.dart';
 /// Also adds and edits recurring items: a new record with a repeat rule
 /// becomes one.
 class TxnEditScreen extends StatefulWidget {
-  const TxnEditScreen({super.key, required this.app, this.txn, this.recurring, this.repeat = false, this.draft});
+  const TxnEditScreen({
+    super.key,
+    required this.app,
+    this.txn,
+    this.recurring,
+    this.repeat = false,
+    this.draft,
+    this.categoryGuessed = true,
+  });
 
   final AppState app;
 
@@ -28,6 +36,10 @@ class TxnEditScreen extends StatefulWidget {
 
   /// A new record filled in already (a scanned invoice), to check and save.
   final Txn? draft;
+
+  /// The draft's category came from the user's own history; when not,
+  /// the AI can be asked for one.
+  final bool categoryGuessed;
 
   @override
   State<TxnEditScreen> createState() => _TxnEditScreenState();
@@ -59,6 +71,34 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   /// turned that on.
   GeoPoint? _location;
   var _locating = false;
+
+  /// Asking the AI for the scanned invoice's category, or done asking.
+  var _askingAi = false, _aiPicked = false;
+
+  bool get _offerAiCategory =>
+      !widget.categoryGuessed &&
+      !_aiPicked &&
+      !_isTransfer &&
+      widget.draft?.invoice != null &&
+      _app.canAskAiCategory(widget.draft!.invoice!);
+
+  Future<void> _askAiCategory() async {
+    setState(() {
+      _askingAi = true;
+      _error = null;
+    });
+    final (id, problem) = await _app.aiCategoryFor(widget.draft!.invoice!);
+    if (!mounted) return;
+    setState(() {
+      _askingAi = false;
+      if (id != null && _ledger.category(id)?.kind == _kind) {
+        _categoryId = id;
+        _aiPicked = true;
+      } else {
+        _error = problem ?? 'AI 選的分類不能用在這裡';
+      }
+    });
+  }
 
   AppState get _app => widget.app;
   LedgerStore get _ledger => _app.ledger;
@@ -448,9 +488,22 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
               ),
               leading: const Icon(Icons.category_outlined),
               title: Text(categoryLabel(_ledger, _categoryId)),
+              subtitle: _aiPicked ? const Text('AI 建議的分類，點一下可以改') : null,
               trailing: const Icon(Icons.expand_more),
               onTap: _chooseCategory,
             ),
+            if (_offerAiCategory)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('aiCategory'),
+                  onPressed: _askingAi ? null : _askAiCategory,
+                  icon: _askingAi
+                      ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome_outlined),
+                  label: Text(_askingAi ? 'AI 判斷中…' : '以前沒記過這家，讓 AI 選分類'),
+                ),
+              ),
             const SizedBox(height: 16),
             _accountPicker(
               key: const Key('txnAccount'),

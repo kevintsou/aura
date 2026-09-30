@@ -716,6 +716,41 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// What the AI may see of [invoice] to pick a category: the seller's
+  /// name, and the item names when the user shares them.
+  ({String? seller, List<String> items}) _invoiceClues(Invoice invoice) => (
+    seller: invoice.sellerName,
+    items: aiConfig.shareInvoiceItems ? [for (final i in invoice.items) i.name] : const [],
+  );
+
+  /// Whether the AI can be asked to categorize [invoice].
+  bool canAskAiCategory(Invoice invoice) {
+    final c = _invoiceClues(invoice);
+    return aiReady && ((c.seller?.trim().isNotEmpty ?? false) || c.items.isNotEmpty);
+  }
+
+  /// The expense category the AI picks for [invoice]: (id, problem).
+  Future<(String?, String?)> aiCategoryFor(Invoice invoice) async {
+    final l = view;
+    final names = {for (final c in l.categories) c.id: c.name};
+    final categories = {
+      for (final c in l.categories)
+        if (c.kind == TxnKind.expense) c.id: c.parentId == null ? c.name : '${names[c.parentId]}／${c.name}',
+    };
+    final clues = _invoiceClues(invoice);
+    try {
+      final id = await aiSuggestCategory(
+        clientFactory(aiConfig, _apiKey),
+        categories: categories,
+        seller: clues.seller,
+        items: clues.items,
+      );
+      return id == null ? (null, 'AI 沒有找到適合的分類，請自己選') : (id, null);
+    } on AiClientException catch (e) {
+      return (null, e.toString());
+    }
+  }
+
   AiClient clientFor(AiEndpointConfig config, String? apiKey) =>
       clientFactory(config, apiKey);
 
