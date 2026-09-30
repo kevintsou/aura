@@ -62,6 +62,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
               icon: const Icon(Icons.calculate_outlined),
               label: const Text('省錢試算'),
             ),
+            const SizedBox(width: 8),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(

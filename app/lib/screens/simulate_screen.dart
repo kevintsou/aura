@@ -47,6 +47,12 @@ class _SimulateScreenState extends State<SimulateScreen> {
     if (top != null) _changes.add(_Change(top.category!.id));
   }
 
+  /// Spending in the 12 full months before this one.
+  bool get _hasOlderSpending {
+    final year = recentMonths(_app.clock(), 12);
+    return _l.count(TxnFilter(from: year.first.from, to: year.last.to, kinds: const {TxnKind.expense})) > 0;
+  }
+
   SpendingHabit _habit(String id) => spendingHabit(_l, id, today: _app.clock(), months: _months);
 
   Future<void> _pick(_Change? change) async {
@@ -138,6 +144,19 @@ class _SimulateScreenState extends State<SimulateScreen> {
             onSelectionChanged: (s) => setState(() => _months = s.single),
           ),
           const SizedBox(height: 16),
+          if (result.spending == Decimal.zero)
+            Card.outlined(
+              key: const Key('simNoHistory'),
+              margin: const EdgeInsets.only(bottom: 16),
+              child: ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('這段期間沒有支出紀錄'),
+                subtitle: Text(
+                  '試算用的是完整月份的平均（不含這個月）。'
+                  '${_months < 12 && _hasOlderSpending ? '可以改用 12 個月，或' : ''}記滿一個月後再來試試。',
+                ),
+              ),
+            ),
           for (final (i, c) in _changes.indexed) ...[
             _ChangeCard(
               key: Key('change-$i'),

@@ -183,6 +183,18 @@ void main() {
     ]);
   });
 
+  test('no history, no "more than usual"; a new category is called new', () {
+    final first = ledger([spend(DateTime(2026, 9, 3), 'fun', '2000'), spend(DateTime(2026, 9, 4), 'car', '1800')]);
+    final ins = monthlyInsights(first, sep, today: DateTime(2026, 9, 29));
+    expect([for (final i in ins) i.kind], [InsightKind.total]);
+
+    final later = ledger([...usual(), spend(DateTime(2026, 9, 3), 'lunch', '3000'), spend(DateTime(2026, 9, 5), 'fun', '1000')])
+      ..addCategory(const Category(id: 'pets', kind: TxnKind.expense, name: '寵物'));
+    later.addTxn(spend(DateTime(2026, 9, 6), 'pets', '2500'));
+    final pets = monthlyInsights(later, sep, today: DateTime(2026, 9, 29)).firstWhere((i) => i.categoryId == 'pets');
+    expect(pets.text, '寵物 NT\$2,500，前三個月沒有這類支出');
+  });
+
   test('a month with nothing says nothing', () {
     expect(monthlyInsights(ledger(const []), sep, today: DateTime(2026, 9, 29)), isEmpty);
   });

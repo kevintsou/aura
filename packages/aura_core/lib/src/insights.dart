@@ -128,8 +128,11 @@ List<Insight> monthlyInsights(
     final cat = ledger.category(id);
     if (cat != null) changes.add((cat, Decimal.zero, _third(sum)));
   }
+  // With no spending at all in the months before (a new ledger, or the
+  // first month imported), there is no "usual" to compare with.
+  final hasHistory = prevMonths.any((m) => m.total != Decimal.zero);
   final big = [
-    for (final (cat, nowC, avgC) in changes)
+    for (final (cat, nowC, avgC) in hasHistory ? changes : const <(Category, Decimal, Decimal)>[])
       if ((nowC - avgC).abs() >= Decimal.fromInt(500) &&
           (avgC == Decimal.zero || ((nowC - avgC).abs() / avgC).toDouble() >= 0.2))
         (cat, nowC, avgC),
@@ -139,8 +142,10 @@ List<Insight> monthlyInsights(
     out.add(
       Insight(
         up ? InsightKind.categoryUp : InsightKind.categoryDown,
-        '${cat.name} ${_money(nowC)}，${up ? '比平常多' : '比平常少'} ${_money((nowC - avgC).abs())}'
-        '（前三個月平均 ${_money(avgC)}）',
+        avgC == Decimal.zero
+            ? '${cat.name} ${_money(nowC)}，前三個月沒有這類支出'
+            : '${cat.name} ${_money(nowC)}，${up ? '比平常多' : '比平常少'} ${_money((nowC - avgC).abs())}'
+                  '（前三個月平均 ${_money(avgC)}）',
         categoryId: cat.id,
         amount: nowC - avgC,
       ),

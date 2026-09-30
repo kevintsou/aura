@@ -96,4 +96,23 @@ void main() {
     expect(app.tab.value, AppState.assistantTab);
     expect(find.text('接上你自己的 AI'), findsOneWidget, reason: 'not set up in this test');
   });
+
+  testWidgets('says why when there is nothing to go on', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final app = AppState(ledger: InMemoryLedger(), settings: MemoryAiSettingsStore(), clock: () => DateTime(2026, 9, 15));
+    await app.load();
+    app.startFresh();
+    await tester.pumpWidget(AuraApp(app: app));
+    await tester.tap(find.text('報表'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('openBudgets')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('openSimulation')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simNoHistory')), findsOneWidget);
+    expect(find.textContaining('可以改用 12 個月'), findsNothing, reason: 'nothing in 12 months either');
+    expect(find.textContaining('記滿一個月後再來試試'), findsOneWidget);
+  });
 }
