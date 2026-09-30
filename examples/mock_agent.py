@@ -6,6 +6,7 @@ needs (see docs/ai-agent-api.md):
 
   GET  /v1/models            -> {"data": [{"id": "mock-agent"}]}
   POST /v1/chat/completions  -> a tool call, or a final answer
+                                (as server-sent events when "stream": true)
 
 Flow: when the user asks something, it asks Aura to run the
 `aggregate_transactions` tool (Aura runs it on the phone and sends the
@@ -75,6 +76,38 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _stream(self, message, finish_reason):
+        """The same answer as server-sent events: a few characters at a time."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+
+        def event(delta, finish=None, usage=None):
+            chunk = {
+                "id": f"chatcmpl-{int(time.time() * 1000)}",
+                "object": "chat.completion.chunk",
+                "model": MODEL,
+                "choices": [] if usage else [{"index": 0, "delta": delta, "finish_reason": finish}],
+            }
+            if usage:
+                chunk["usage"] = usage
+            self.wfile.write(f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode())
+            self.wfile.flush()
+
+        if message.get("tool_calls"):
+            calls = [dict(c, index=i) for i, c in enumerate(message["tool_calls"])]
+            event({"role": "assistant", "tool_calls": calls})
+        text = message.get("content") or ""
+        for i in range(0, len(text), 4):
+            event({"content": text[i : i + 4]})
+            time.sleep(0.03)
+        event({}, finish_reason)
+        event({}, usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
+
     def do_OPTIONS(self):
         self._send(204, {})
 
@@ -88,20 +121,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, {"error": {"message": "not found"}})
         req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         messages, tools = req.get("messages", []), req.get("tools", [])
+        reply = self._stream if req.get("stream") else lambda m, f: self._send(200, completion(m, f))
         last = messages[-1] if messages else {}
         print(f"<- {last.get('role')}: {str(last.get('content'))[:120]}", flush=True)
         if last.get("role") == "tool":
             answer = decide_answer(json.loads(last["content"]))
-            return self._send(200, completion({"role": "assistant", "content": answer}, "stop"))
+            return reply({"role": "assistant", "content": answer}, "stop")
         call = decide_tool_call(messages, tools)
         if call is None:
             text = "OK" if "OK" in str(last.get("content")) else "這個示範 Agent 需要 Aura 的帳本工具。"
-            return self._send(200, completion({"role": "assistant", "content": text}, "stop"))
+            return reply({"role": "assistant", "content": text}, "stop")
         print(f"-> tool call {call['function']['name']} {call['function']['arguments']}", flush=True)
-        return self._send(
-            200,
-            completion({"role": "assistant", "content": None, "tool_calls": [call]}, "tool_calls"),
-        )
+        return reply({"role": "assistant", "content": None, "tool_calls": [call]}, "tool_calls")
 
     def log_message(self, *args):
         pass

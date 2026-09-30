@@ -7,12 +7,7 @@ import '../format.dart';
 import '../widgets/tool_chart.dart';
 import 'ai_settings_screen.dart';
 
-const _suggestions = [
-  '這個月花最多錢的是哪些分類？',
-  '最近三個月每個月的支出趨勢如何？',
-  '我最常在哪些商家消費？',
-  '今年加油總共花了多少？',
-];
+const _suggestions = ['這個月花最多錢的是哪些分類？', '最近三個月每個月的支出趨勢如何？', '我最常在哪些商家消費？', '今年加油總共花了多少？'];
 
 class AssistantScreen extends StatefulWidget {
   const AssistantScreen({super.key, required this.app});
@@ -30,7 +25,22 @@ class _AssistantScreenState extends State<AssistantScreen> {
   AssistantSession get _session => widget.app.assistant;
 
   @override
+  void initState() {
+    super.initState();
+    _session.addListener(_follow);
+  }
+
+  /// Keeps the newest text in view while an answer streams in, unless
+  /// the user scrolled up to read something earlier.
+  void _follow() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!_scroll.hasClients) return;
+    final p = _scroll.position;
+    if (p.maxScrollExtent - p.pixels < 120) _scroll.jumpTo(p.maxScrollExtent);
+  });
+
+  @override
   void dispose() {
+    _session.removeListener(_follow);
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -52,10 +62,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
     });
   }
 
-  void _openSettings() => Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => AiSettingsScreen(app: widget.app)),
-  );
+  /// Busy, and not already showing words as they come.
+  bool get _thinking =>
+      _session.busy && !(_session.items.lastOrNull is ReplyChatItem && (_session.items.last as ReplyChatItem).writing);
+
+  void _openSettings() => Navigator.push(context, MaterialPageRoute(builder: (_) => AiSettingsScreen(app: widget.app)));
 
   @override
   Widget build(BuildContext context) {
@@ -72,11 +83,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 icon: const Icon(Icons.refresh),
                 onPressed: _session.items.isEmpty ? null : _session.reset,
               ),
-              IconButton(
-                tooltip: 'AI 連線設定',
-                icon: const Icon(Icons.tune),
-                onPressed: _openSettings,
-              ),
+              IconButton(tooltip: 'AI 連線設定', icon: const Icon(Icons.tune), onPressed: _openSettings),
             ],
           ),
           body: !app.aiReady
@@ -89,14 +96,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
                           : ListView.builder(
                               controller: _scroll,
                               padding: const EdgeInsets.all(12),
-                              itemCount: _session.items.length +
-                                  (_session.busy ? 1 : 0),
-                              itemBuilder: (context, i) =>
-                                  i == _session.items.length
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(12),
-                                      child: LinearProgressIndicator(),
-                                    )
+                              itemCount: _session.items.length + (_thinking ? 1 : 0),
+                              itemBuilder: (context, i) => i == _session.items.length
+                                  ? const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator())
                                   : _ChatBubble(item: _session.items[i]),
                             ),
                     ),
@@ -153,10 +155,7 @@ class _NotConfigured extends StatelessWidget {
         children: [
           const Icon(Icons.auto_awesome, size: 48),
           const SizedBox(height: 16),
-          const Text(
-            '接上你自己的 AI',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          const Text('接上你自己的 AI', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           const Text(
             'Aura 完全免費，AI 分析使用你自己的 OpenAI API 金鑰，'
@@ -164,11 +163,7 @@ class _NotConfigured extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: onSetup,
-            icon: const Icon(Icons.settings),
-            label: const Text('設定 AI 連線'),
-          ),
+          FilledButton.icon(onPressed: onSetup, icon: const Icon(Icons.settings), label: const Text('設定 AI 連線')),
         ],
       ),
     ),
@@ -186,25 +181,15 @@ class _Welcome extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text(
-          '使用 ${app.aiConfig.preset.label} · ${app.aiConfig.model}',
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
+        Text('使用 ${app.aiConfig.preset.label} · ${app.aiConfig.model}', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 8),
-        Text(
-          count == 0
-              ? '帳本目前是空的。先到「設定」匯入 CWMoney 的 CSV，AI 才有資料可以分析。'
-              : '帳本有 $count 筆紀錄。可以這樣問：',
-        ),
+        Text(count == 0 ? '帳本目前是空的。先到「設定」匯入 CWMoney 的 CSV，AI 才有資料可以分析。' : '帳本有 $count 筆紀錄。可以這樣問：'),
         const SizedBox(height: 16),
         if (count > 0)
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              for (final s in _suggestions)
-                ActionChip(label: Text(s), onPressed: () => onAsk(s)),
-            ],
+            children: [for (final s in _suggestions) ActionChip(label: Text(s), onPressed: () => onAsk(s))],
           ),
       ],
     );
@@ -243,15 +228,15 @@ class _ChatBubble extends StatelessWidget {
           ),
         ),
       ),
-      ErrorChatItem(:final message) => _Bubble(
-        color: scheme.errorContainer,
-        child: Text(message),
-      ),
+      ErrorChatItem(:final message) => _Bubble(color: scheme.errorContainer, child: Text(message)),
       final ToolChatItem tool => switch (tool.result) {
         final r? when r.ok => switch (ToolChartData.from(tool.call.name, r.content)) {
           final chart? => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [_ToolTile(item: tool), ToolChart(data: chart)],
+            children: [
+              _ToolTile(item: tool),
+              ToolChart(data: chart),
+            ],
           ),
           null => _ToolTile(item: tool),
         },
@@ -271,10 +256,7 @@ class _Bubble extends StatelessWidget {
     margin: const EdgeInsets.symmetric(vertical: 4),
     padding: const EdgeInsets.all(12),
     constraints: const BoxConstraints(maxWidth: 560),
-    decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(12),
-    ),
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
     child: child,
   );
 }
@@ -294,14 +276,8 @@ class _ToolTile extends StatelessWidget {
       child: ExpansionTile(
         dense: true,
         leading: result == null
-            ? const SizedBox.square(
-                dimension: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(
-                result.ok ? Icons.check_circle_outline : Icons.error_outline,
-                size: 20,
-              ),
+            ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(result.ok ? Icons.check_circle_outline : Icons.error_outline, size: 20),
         title: Text(describeToolCall(item.call)),
         subtitle: compact.isEmpty || compact == '{}'
             ? null

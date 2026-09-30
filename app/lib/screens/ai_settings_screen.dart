@@ -22,6 +22,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   final _headers = TextEditingController();
   bool _enableTools = true;
   bool _shareItems = true;
+  bool _stream = true;
   bool _showKey = false;
   bool _working = false;
   String? _status;
@@ -37,6 +38,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     _model.text = c.model;
     _enableTools = c.enableTools;
     _shareItems = c.shareInvoiceItems;
+    _stream = c.stream;
     _headers.text = c.extraHeaders.entries
         .map((e) => '${e.key}: ${e.value}')
         .join('\n');
@@ -68,6 +70,7 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
     extraHeaders: _parseHeaders(),
     enableTools: _enableTools,
     shareInvoiceItems: _shareItems,
+    stream: _stream,
   );
 
   String? get _key => _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim();
@@ -270,6 +273,14 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             onChanged: _enableTools
                 ? (v) => setState(() => _shareItems = v)
                 : null,
+          ),
+          SwitchListTile(
+            key: const Key('streamReplies'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('逐字顯示回答'),
+            subtitle: const Text('AI 一邊寫一邊顯示。端點不支援時會自動改成整段顯示'),
+            value: _stream,
+            onChanged: (v) => setState(() => _stream = v),
           ),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,

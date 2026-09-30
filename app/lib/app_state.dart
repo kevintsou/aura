@@ -732,6 +732,7 @@ class AppState extends ChangeNotifier {
     return AuraAgent(
       client: clientFactory(aiConfig, _apiKey),
       tools: tools,
+      stream: aiConfig.stream,
       systemPrompt: auraSystemPrompt(
         today: clock(),
         toolsEnabled: tools != null,
@@ -765,9 +766,12 @@ class ToolChatItem extends ChatItem {
 }
 
 class ReplyChatItem extends ChatItem {
-  const ReplyChatItem(this.text, {this.usage});
-  final String text;
-  final TokenUsage? usage;
+  ReplyChatItem(this.text, {this.usage, this.writing = false});
+  String text;
+  TokenUsage? usage;
+
+  /// Still streaming in.
+  bool writing;
 }
 
 class ErrorChatItem extends ChatItem {
@@ -799,18 +803,37 @@ class AssistantSession extends ChangeNotifier {
     busy = true;
     notifyListeners();
     final running = <String, ToolChatItem>{};
+    ReplyChatItem? writing;
     await for (final event in agent.ask(question)) {
       if (!identical(agent, _agent)) return; // reset mid-flight
       switch (event) {
+        case AgentText(:final delta):
+          if (writing == null) items.add(writing = ReplyChatItem('', writing: true));
+          writing.text += delta;
         case AgentToolStarted(:final call):
+          // Words before a tool call ("let me look that up") stay as they are.
+          if (writing != null) {
+            writing.writing = false;
+            if (writing.text.trim().isEmpty) items.remove(writing);
+            writing = null;
+          }
           final item = ToolChatItem(call);
           running[call.id] = item;
           items.add(item);
         case AgentToolFinished(:final result):
           running[result.call.id]?.result = result;
         case AgentReply(:final text, :final usage):
-          items.add(ReplyChatItem(text.isEmpty ? '（AI 沒有回覆內容）' : text, usage: usage));
+          final reply = writing ?? ReplyChatItem('');
+          if (writing == null) items.add(reply);
+          reply
+            ..text = text.isEmpty ? '（AI 沒有回覆內容）' : text
+            ..usage = usage
+            ..writing = false;
+          writing = null;
         case AgentFailed(:final message):
+          if (writing != null && writing.text.trim().isEmpty) items.remove(writing);
+          writing?.writing = false;
+          writing = null;
           items.add(ErrorChatItem(message));
       }
       notifyListeners();

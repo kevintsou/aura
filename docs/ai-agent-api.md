@@ -31,6 +31,7 @@ Aura 完全免費，不提供 AI 服務，也**不經過任何 Aura 伺服器**�
 | 模型 | 放在請求的 `model` 欄位。自訂 Agent 可以拿它來分流，例如 `family-finance-agent` |
 | 讓 AI 查詢帳本 | 關閉時不送 `tools`。適合不支援 tool calling 的端點 |
 | 分享發票品項明細 | 關閉時，工具結果不含商品明細，`search_invoice_items` 工具也不會提供 |
+| 逐字顯示回答 | 開啟時（預設）請求帶 `"stream": true`，見 3.4 |
 | 自訂 HTTP 標頭 | 每次請求都會帶上，例如 `X-Agent-Id: xxx` |
 
 ## 3. 請求
@@ -45,11 +46,13 @@ Aura 完全免費，不提供 AI 服務，也**不經過任何 Aura 伺服器**�
     { "role": "user", "content": "這個月花最多錢的是哪些分類？" }
   ],
   "tools": [ /* 見第 5 節 */ ],
-  "tool_choice": "auto"
+  "tool_choice": "auto",
+  "stream": true,                                // 使用者關掉「逐字顯示回答」時不送
+  "stream_options": { "include_usage": true }
 }
 ```
 
-- 為了相容各家實作，Aura **不送** `temperature`、`max_tokens`、`stream`。如果需要，由你的 Agent 自己決定。
+- 為了相容各家實作，Aura **不送** `temperature`、`max_tokens`。如果需要，由你的 Agent 自己決定。
 - `messages` 包含同一段對話的完整歷史，包括之前的 tool 呼叫和結果。Agent 可以完全無狀態。
 - system prompt 會說明今天的日期和回答原則。你的 Agent 可以不理它，換成自己的。
 
@@ -97,11 +100,31 @@ Aura 會在手機上執行每一個 tool call，然後把結果加進對話再�
 
 `usage` 是選填的；有提供的話，App 會顯示這次回答用了多少 token。
 
-### 3.4 `GET {網址}/models`（選填）
+### 3.4 串流（選填）
+
+收到 `"stream": true` 時，可以用 server-sent events 回應（`Content-Type: text/event-stream`），格式和 OpenAI 相同：
+
+```text
+data: {"choices":[{"index":0,"delta":{"content":"九月支出"}}]}
+
+data: {"choices":[{"index":0,"delta":{"content":" NT$4,010"}}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":1234,"completion_tokens":56}}
+
+data: [DONE]
+```
+
+- 工具呼叫也可以分段送：`delta.tool_calls` 裡用 `index` 對應同一個呼叫，`function.arguments` 分段接起來。
+- **不想實作串流也沒關係**：照樣回一般的 JSON（`Content-Type: application/json`），App 會整段顯示。端點回 400／415／422／501 拒絕串流時，App 會改用一般請求，並在這次對話裡不再要求串流。
+- 串流時的逾時是「兩段之間」最多 90 秒，不是整個回答。
+
+### 3.5 `GET {網址}/models`（選填）
 
 回傳 `{"data":[{"id":"model-a"}, …]}`，App 的「取得模型清單」按鈕會用到。沒有實作也沒關係，使用者可以直接輸入模型名稱。
 
-### 3.5 限制
+### 3.6 限制
 
 - 一個問題最多 **8 輪**工具呼叫，超過就中止並提示使用者。
 - 每個請求的逾時是 90 秒。

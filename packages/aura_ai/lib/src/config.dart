@@ -58,6 +58,7 @@ class AiEndpointConfig {
     this.extraHeaders = const {},
     this.enableTools = true,
     this.shareInvoiceItems = true,
+    this.stream = true,
     this.timeout = const Duration(seconds: 90),
   });
 
@@ -89,6 +90,12 @@ class AiEndpointConfig {
 
   /// Let tools return invoice line items (product names, quantities).
   final bool shareInvoiceItems;
+
+  /// Show answers as they are written (`"stream": true`). Endpoints that
+  /// cannot stream fall back to whole answers by themselves.
+  final bool stream;
+
+  /// For connecting, and for each pause while an answer streams in.
   final Duration timeout;
 
   /// Problems that make the configuration unusable, in Traditional Chinese.
@@ -119,6 +126,7 @@ class AiEndpointConfig {
     Map<String, String>? extraHeaders,
     bool? enableTools,
     bool? shareInvoiceItems,
+    bool? stream,
     Duration? timeout,
   }) => AiEndpointConfig(
     preset: preset ?? this.preset,
@@ -127,6 +135,7 @@ class AiEndpointConfig {
     extraHeaders: extraHeaders ?? this.extraHeaders,
     enableTools: enableTools ?? this.enableTools,
     shareInvoiceItems: shareInvoiceItems ?? this.shareInvoiceItems,
+    stream: stream ?? this.stream,
     timeout: timeout ?? this.timeout,
   );
 
@@ -137,6 +146,7 @@ class AiEndpointConfig {
     'extraHeaders': extraHeaders,
     'enableTools': enableTools,
     'shareInvoiceItems': shareInvoiceItems,
+    'stream': stream,
     'timeoutSeconds': timeout.inSeconds,
   };
 
@@ -152,6 +162,7 @@ class AiEndpointConfig {
         },
         enableTools: json['enableTools'] as bool? ?? true,
         shareInvoiceItems: json['shareInvoiceItems'] as bool? ?? true,
+        stream: json['stream'] as bool? ?? true,
         timeout: Duration(seconds: json['timeoutSeconds'] as int? ?? 90),
       );
 }

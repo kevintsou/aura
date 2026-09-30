@@ -20,6 +20,13 @@ class AgentToolFinished extends AgentEvent {
   final ToolRunResult result;
 }
 
+/// More of the answer as it is written (streaming endpoints only). The
+/// text may also come before tool calls ("let me look that up").
+class AgentText extends AgentEvent {
+  const AgentText(this.delta);
+  final String delta;
+}
+
 class AgentReply extends AgentEvent {
   const AgentReply(this.text, {this.usage});
   final String text;
@@ -41,7 +48,9 @@ class AuraAgent {
     required this.tools,
     required String systemPrompt,
     this.maxRounds = 8,
-  }) : _history = [SystemMessage(systemPrompt)];
+    bool stream = true,
+  }) : _stream = stream && client is StreamingAiClient,
+       _history = [SystemMessage(systemPrompt)];
 
   final AiClient client;
 
@@ -49,6 +58,9 @@ class AuraAgent {
   final ToolRegistry? tools;
   final int maxRounds;
   final List<ChatMessage> _history;
+
+  /// Turned off for good when the endpoint rejects a streaming request.
+  bool _stream;
 
   List<ChatMessage> get history => List.unmodifiable(_history);
 
@@ -61,9 +73,31 @@ class AuraAgent {
     var input = 0, output = 0;
     var reported = false;
     for (var round = 0; round < maxRounds; round++) {
-      final ChatCompletion completion;
+      ChatCompletion? completion;
       try {
-        completion = await client.complete(
+        if (_stream) {
+          var wrote = false;
+          try {
+            await for (final e in (client as StreamingAiClient).completeStream(
+              messages: _history,
+              tools: tools?.specs ?? const [],
+            )) {
+              switch (e) {
+                case CompletionText(:final delta):
+                  wrote = true;
+                  yield AgentText(delta);
+                case CompletionDone(completion: final c):
+                  completion = c;
+              }
+            }
+          } on AiClientException catch (e) {
+            // Some endpoints reject "stream" or "stream_options"; ask
+            // again the plain way, and stop streaming with this one.
+            if (wrote || !const {400, 415, 422, 501}.contains(e.statusCode)) rethrow;
+            _stream = false;
+          }
+        }
+        completion ??= await client.complete(
           messages: _history,
           tools: tools?.specs ?? const [],
         );
