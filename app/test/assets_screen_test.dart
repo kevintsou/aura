@@ -43,5 +43,26 @@ void main() {
       reason: 'the USD balance is now worth 2.37 less per dollar',
     );
     expect(app.ledger.meta('fx.USD'), '30', reason: 'kept with the ledger, so backups have it');
+
+    Future<void> answer(String? text) async {
+      await tester.tap(find.byKey(const Key('rate-USD')));
+      await tester.pumpAndSettle();
+      if (text == null) {
+        await tester.tap(find.text('取消'));
+      } else {
+        await tester.enterText(find.byKey(const Key('askText')), text);
+        await tester.tap(find.byKey(const Key('askTextOk')));
+      }
+      await tester.pumpAndSettle();
+    }
+
+    await answer(null);
+    expect(app.ledger.meta('fx.USD'), '30', reason: 'cancelling changes nothing');
+    await answer('abc');
+    expect(app.ledger.meta('fx.USD'), '30');
+    expect(find.text('匯率要是大於 0 的數字，沒有更改'), findsOneWidget);
+    await answer('');
+    expect(app.ledger.meta('fx.USD'), isNull, reason: 'empty goes back to the recorded rate');
+    expect(find.text('1 USD = NT\$32.37（2026/09/22 的紀錄）'), findsOneWidget);
   });
 }

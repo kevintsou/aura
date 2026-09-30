@@ -129,10 +129,16 @@ class _Summary extends StatelessWidget {
       label: '1 $currency = 多少新台幣',
       initial: current?.manual ?? false ? current!.rate.toString() : '',
       message: '只用來換算淨資產。留空就用最近一筆紀錄的匯率。',
+      allowEmpty: true,
     );
-    if (!context.mounted) return;
-    final rate = Decimal.tryParse(text ?? '');
-    app.setManualRate(currency, rate != null && rate > Decimal.zero ? rate : null);
+    if (text == null || !context.mounted) return; // cancelled: keep it as it is
+    if (text.isEmpty) return app.setManualRate(currency, null);
+    final rate = Decimal.tryParse(text.replaceAll(',', ''));
+    if (rate == null || rate <= Decimal.zero) {
+      showMessage(context, '匯率要是大於 0 的數字，沒有更改');
+      return;
+    }
+    app.setManualRate(currency, rate);
   }
 
   @override

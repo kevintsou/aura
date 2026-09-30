@@ -8,6 +8,9 @@ Future<String?> askText(
   String initial = '',
   bool obscure = false,
   String? message,
+  /// Return '' for an empty answer instead of null, so it can be told
+  /// apart from cancelling.
+  bool allowEmpty = false,
 }) async {
   final controller = TextEditingController(text: initial);
   final result = await showDialog<String>(
@@ -40,7 +43,8 @@ Future<String?> askText(
     ),
   );
   final text = result?.trim();
-  return text == null || text.isEmpty ? null : text;
+  if (text == null) return null;
+  return text.isEmpty && !allowEmpty ? null : text;
 }
 
 /// A yes/no question; true only when [action] is chosen.
