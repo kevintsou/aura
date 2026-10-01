@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The icon's background, the same gradient as assets/icon/full.svg. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:angle="315" android:startColor="#3B7DA3" android:endColor="#244E6B" android:type="linear" />
+</shape>

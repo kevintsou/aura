@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B7DA3"/><stop offset="1" stop-color="#244E6B"/></linearGradient></defs>
+  <rect width="1024" height="1024" fill="url(#g)"/>
+  <!-- a coin with its aura: two soft halos and a full ring -->
+  <circle cx="512" cy="512" r="318" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="26"/>
+  <circle cx="512" cy="512" r="250" fill="none" stroke="#FFFFFF" stroke-width="44"/>
+  <circle cx="512" cy="512" r="150" fill="#F2C14E"/>
+  <circle cx="512" cy="512" r="104" fill="none" stroke="#D9A73A" stroke-width="16"/>
+</svg>
