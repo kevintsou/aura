@@ -50,6 +50,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   final _toAmount = TextEditingController();
   final _rate = TextEditingController();
   final _note = TextEditingController();
+  final _noteFocus = FocusNode();
   late TxnKind _kind;
   String? _categoryId;
   String? _accountId;
@@ -167,6 +168,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     for (final c in [_amount, _toAmount, _rate, _note, _every, _times]) {
       c.dispose();
     }
+    _noteFocus.dispose();
     super.dispose();
   }
 
@@ -178,6 +180,53 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
       _location = here;
       _locating = false;
     });
+  }
+
+  /// A new income or expense typed by hand: notes can be completed and
+  /// their usual category, account and amount offered.
+  bool get _quickEntry => _isNew && widget.draft == null && _unit == null && !_isTransfer;
+
+  /// The usual entry for the note typed, when it would change something.
+  UsualEntry? get _usual {
+    if (!_quickEntry) return null;
+    final u = usualFor(_app.view, _note.text);
+    if (u == null) return null;
+    final same = u.kind == _kind &&
+        (u.categoryId == null || u.categoryId == _categoryId) &&
+        (u.accountId == null || u.accountId == _accountId) &&
+        _amount.text.trim().isNotEmpty;
+    return same ? null : u;
+  }
+
+  void _applyUsual(UsualEntry u) => setState(() {
+    if (u.kind != _kind) _kind = u.kind;
+    if (u.categoryId != null && _ledger.category(u.categoryId!)?.kind == _kind) _categoryId = u.categoryId;
+    if (u.accountId != null && _app.activeAccounts.any((a) => a.id == u.accountId)) {
+      _accountId = u.accountId;
+      _rate.text = _lastRate(_accountId) ?? '';
+    }
+    if (_amount.text.trim().isEmpty) _amount.text = u.amount.toString();
+    _error = null;
+  });
+
+  String _usualLabel(UsualEntry u) => [
+    if (u.categoryId != null) categoryLabel(_ledger, u.categoryId),
+    if (u.accountId != null) ?_ledger.account(u.accountId!)?.name,
+    formatMoney(u.amount, currency: _currencyOf(u.accountId)),
+  ].join('・');
+
+  /// Starts a new record from this one, dated today.
+  void _copy() {
+    final now = _app.clock();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TxnEditScreen(
+          app: _app,
+          draft: copyOfTxn(_old!, id: newId('t'), date: now, createdAt: now),
+        ),
+      ),
+    );
   }
 
   /// Most recent exchange rate recorded for [accountId].
@@ -455,6 +504,13 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
               : '編輯紀錄',
         ),
         actions: [
+          if (widget.txn != null)
+            IconButton(
+              key: const Key('copyTxn'),
+              tooltip: '複製成新的一筆',
+              icon: const Icon(Icons.copy_outlined),
+              onPressed: _copy,
+            ),
           if (!_isNew)
             IconButton(
               key: const Key('deleteTxn'),
@@ -613,13 +669,53 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             },
           ),
           const SizedBox(height: 16),
-          TextField(
-            key: const Key('txnNote'),
-            controller: _note,
-            maxLines: 3,
-            minLines: 1,
-            decoration: const InputDecoration(labelText: '備註', border: OutlineInputBorder()),
+          RawAutocomplete<String>(
+            textEditingController: _note,
+            focusNode: _noteFocus,
+            optionsBuilder: (value) => _quickEntry ? recentNotes(_app.view, value.text) : const <String>[],
+            onSelected: (note) {
+              if (usualFor(_app.view, note) case final u?) _applyUsual(u);
+            },
+            fieldViewBuilder: (context, controller, focus, onSubmitted) => TextField(
+              key: const Key('txnNote'),
+              controller: controller,
+              focusNode: focus,
+              maxLines: 3,
+              minLines: 1,
+              decoration: const InputDecoration(labelText: '備註', border: OutlineInputBorder()),
+            ),
+            optionsViewBuilder: (context, onSelected, options) => Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      for (final (i, o) in options.indexed)
+                        ListTile(key: Key('noteOption-$i'), dense: true, title: Text(o), onTap: () => onSelected(o)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
+          if (_usual case final u?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ActionChip(
+                  key: const Key('applyUsual'),
+                  avatar: const Icon(Icons.history, size: 18),
+                  label: Text('上次：${_usualLabel(u)}，套用'),
+                  onPressed: () => _applyUsual(u),
+                ),
+              ),
+            ),
           if (!_isTransfer && _unit == null && (_location != null || _locating))
             ListTile(
               key: const Key('txnLocation'),

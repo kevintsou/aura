@@ -15,6 +15,7 @@ export 'src/insights.dart';
 export 'src/interop/cwmoney/merge.dart';
 export 'src/ledger.dart';
 export 'src/model.dart';
+export 'src/quick_entry.dart';
 export 'src/recurring.dart';
 export 'src/reports.dart';
 export 'src/simulate.dart';
