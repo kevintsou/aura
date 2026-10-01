@@ -9,6 +9,7 @@ import 'backup_screen.dart';
 import 'budgets_screen.dart';
 import 'categories_screen.dart';
 import 'dialogs.dart';
+import 'privacy_screen.dart';
 import 'export_action.dart';
 import 'import_action.dart';
 import 'recurring_screen.dart';
@@ -133,6 +134,13 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => exportCwmoneyFile(context, app),
           ),
           const Divider(),
+          ListTile(
+            key: const Key('privacyPolicy'),
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('隱私權政策'),
+            subtitle: const Text('資料存在哪裡、什麼時候會離開手機'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyScreen())),
+          ),
           const AboutListTile(
             icon: Icon(Icons.info_outline),
             applicationName: 'Aura 記帳',

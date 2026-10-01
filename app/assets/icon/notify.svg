@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <g transform="translate(512 512) scale(1.5) translate(-512 -512)">
+  <!-- a coin with its aura: two soft halos and a full ring -->
+  <circle cx="512" cy="512" r="318" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="26"/>
+  <circle cx="512" cy="512" r="250" fill="none" stroke="#FFFFFF" stroke-width="44"/>
+  <circle cx="512" cy="512" r="150" fill="#FFFFFF"/>
+  <circle cx="512" cy="512" r="104" fill="none" stroke="#000000" stroke-opacity="0" stroke-width="16"/>
+  </g></svg>

@@ -46,6 +46,10 @@ docs/
   cwmoney-format.md     CWMoney 匯出格式規格（逆向分析）
   ai-agent-api.md       接自己的 AI Agent：協定與工具規格
   ai-eval.md            AI 評測集：比較不同模型答對多少
+  release.md            發布正式版：簽章、建置、實機測試清單
+  store-listing.md      上架文字、隱私問卷建議答案
+app/assets/legal/privacy-policy.md  隱私權政策（App 內顯示的也是這份）
+app/assets/icon/        App 圖示原始檔
 ```
 
 ## 開發

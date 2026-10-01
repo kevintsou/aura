@@ -250,7 +250,7 @@ CWMoney 的欄位怎麼對應到這個模型，詳見 [`cwmoney-format.md` §4](
 | **M0 格式研究** | ✅ CSV 已完成（`.sdb`／`.idb` 改成選用） | `docs/cwmoney-format.md` | 完成 |
 | **M1 骨架＋匯入** | ✅ Flutter 專案、資料模型、CWMoney CSV 匯入（新版格式）、紀錄列表（分頁）、SQLite 儲存、帳戶餘額與期初餘額補填、帳戶類型和幣別修改、舊版 HTML 格式 | 可以安裝的內測版，能匯入並瀏覽 CWMoney 的資料 | 完成 |
 | **M2 記帳 MVP** | ✅ 從頭開始（預設分類和現金帳戶）、記一筆／編輯／刪除、轉帳（含跨幣別）、外幣匯率、專案、帳戶新增／改名／封存／刪除、分類管理、備份與還原、基本報表（月／年、趨勢、分類占比）、CWMoney 合併匯入 | Alpha | 完成 |
-| **M3 V1** | ✅ 預算、週期收支、App 鎖、雲端備份（Google 雲端硬碟、WebDAV）、匯出 CWMoney 格式的 CSV、照片、隱藏帳戶、資產總覽與外幣換算、週報、發票 QR Code 掃描、GPS 位置；🔲 iCloud 自動備份、Android／iOS 實機測試（包含 Google 登入要用的 OAuth client id）、上架 | Beta → 上架 | 剩實機測試和上架 |
+| **M3 V1** | ✅ 預算、週期收支、App 鎖、雲端備份（Google 雲端硬碟、WebDAV）、匯出 CWMoney 格式的 CSV、照片、隱藏帳戶、資產總覽與外幣換算、週報、發票 QR Code 掃描、GPS 位置；App 圖示與啟動畫面、隱私權政策（App 內）、上架文字與隱私問卷建議答案、正式版簽章設定（見 `release.md`）；🔲 iCloud 自動備份、Android／iOS 實機測試（包含 Google 登入要用的 OAuth client id）、送審上架 | Beta → 上架 | 剩實機測試和送審 |
 | **M5 AI** | ✅ BYOK 連線設定、OpenAI 相容 client、本機帳本工具、Agent 迴圈、對話 UI、月報洞察（「請 AI 寫月報」）、固定支出偵測、發票自動分類（本機規則）、異常與重複警示、回答附圖表、串流輸出（逐字顯示）、發票分類的 AI 補判、AI 評測集 | AI 助理 | 完成 |
 | **M4 V2** | 發票載具同步與對獎（要先申請財政部 AppID）、多裝置同步、共享帳本、桌面小工具、`.sdb`／`.idb` 匯入（要樣本）、證券持股損益 | 2.x | 之後再排 |
 

@@ -56,7 +56,8 @@ class DeviceReminders implements ReminderScheduler {
     }
     await _plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // White on transparent: Android draws notification icons as a silhouette.
+        android: AndroidInitializationSettings('@drawable/ic_stat_aura'),
         // Asked for when the user turns reminders on, not at start.
         iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
