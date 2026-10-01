@@ -460,8 +460,8 @@ class AppState extends ChangeNotifier {
     ));
     final now = clock();
     // CWMoney's own naming, so the file is easy to recognise.
-    final name = 'cwmoney_ex2_db_CSV_${now.year}${_two(now.month)}${_two(now.day)}.csv';
-    if (!await lock.whileAway(() => files.save(name, result.bytes, title: '儲存 CWMoney CSV'))) return null;
+    final name = 'aura_${now.year}${_two(now.month)}${_two(now.day)}.csv';
+    if (!await lock.whileAway(() => files.save(name, result.bytes, title: '儲存 CSV'))) return null;
     return (name, result);
   }
 

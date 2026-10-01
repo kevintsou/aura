@@ -118,15 +118,15 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.file_open_outlined),
-            title: const Text('匯入 CWMoney CSV'),
-            subtitle: Text(app.importedFileName ?? 'CWMoney 經典版匯出的 CSV'),
+            title: const Text('匯入 CSV'),
+            subtitle: Text(app.importedFileName ?? '把舊的記帳紀錄搬過來'),
             onTap: () => importCwmoneyFile(context, app),
           ),
           ListTile(
             key: const Key('exportCwmoney'),
             leading: const Icon(Icons.ios_share),
-            title: const Text('匯出 CWMoney CSV'),
-            subtitle: const Text('CWMoney 經典版的格式，也可以用 Excel 開'),
+            title: const Text('匯出 CSV'),
+            subtitle: const Text('可以用 Excel 開'),
             enabled: app.ledger.count() > 0,
             onTap: () => exportCwmoneyFile(context, app),
           ),
@@ -136,7 +136,7 @@ class SettingsScreen extends StatelessWidget {
             applicationName: 'Aura 記帳',
             applicationVersion: '0.1.0',
             aboutBoxChildren: [
-              Text('免費的記帳 App。相容 CWMoney，AI 分析使用你自己的 API。'),
+              Text('免費的記帳 App。AI 分析使用你自己的 API。'),
             ],
           ),
         ],

@@ -7,7 +7,7 @@ import '../format.dart';
 /// Picks a CWMoney export and imports it: straight in when the ledger is
 /// blank, otherwise after the user chooses between merging and replacing.
 Future<void> importCwmoneyFile(BuildContext context, AppState app) async {
-  final file = await app.lock.whileAway(() => app.files.pick(title: '選擇 CWMoney 匯出的 CSV'));
+  final file = await app.lock.whileAway(() => app.files.pick(title: '選擇要匯入的 CSV'));
   if (file == null || !context.mounted) return;
   final bytes = file.bytes;
   if (app.isBlank) {
@@ -110,7 +110,7 @@ class _MergeDialogState extends State<_MergeDialog> {
               const SizedBox(height: 8),
               Text(
                 '帳本目前的紀錄到 ${formatDate(latest!)}，新紀錄從 ${formatDate(from!)} 開始，'
-                '中間 ${gap - 1} 天沒有紀錄。如果那段期間在 CWMoney 有記帳，也要匯出那段期間再合併一次。',
+                '中間 ${gap - 1} 天沒有紀錄。如果那段期間在原本的 App 有記帳，也要匯出那段期間再合併一次。',
                 key: const Key('mergeGap'),
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
               ),
@@ -263,7 +263,7 @@ String _balanceNote(AppState app) {
     if (app.budgetsDropped.isNotEmpty)
       '檔案裡沒有「${app.budgetsDropped.join('、')}」分類，這些預算已經移除。',
     if (app.balances.values.any((b) => !b.isSet))
-      'CWMoney 的 CSV 沒有期初餘額，請到「帳戶」輸入各帳戶目前的實際餘額。',
+      'CSV 沒有期初餘額，請到「帳戶」輸入各帳戶目前的實際餘額。',
   ];
   return lines.isEmpty ? '' : '\n\n${lines.join('\n')}';
 }

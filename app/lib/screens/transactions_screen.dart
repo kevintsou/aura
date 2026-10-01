@@ -170,7 +170,7 @@ class _Empty extends StatelessWidget {
             Text(
               blank
                   ? '從頭開始會建立常用的分類和一個「現金」帳戶，之後都可以修改。'
-                        '用過 CWMoney 的話，也可以匯入它的 CSV 把歷史紀錄搬過來。'
+                        '也可以匯入 CSV 把以前的記帳紀錄搬過來。'
                   : '按「記一筆」新增第一筆紀錄。',
               textAlign: TextAlign.center,
             ),
@@ -186,7 +186,7 @@ class _Empty extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: () => importCwmoneyFile(context, app),
                 icon: const Icon(Icons.file_open_outlined),
-                label: const Text('匯入 CWMoney CSV'),
+                label: const Text('匯入 CSV'),
               ),
             ],
           ],

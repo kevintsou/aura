@@ -63,7 +63,7 @@ void main() {
     }
 
     await export();
-    expect(files.name, 'cwmoney_ex2_db_CSV_20260929.csv');
+    expect(files.name, 'aura_20260929.csv');
     expect(find.textContaining('11 筆紀錄，14 列'), findsOneWidget);
     expect(find.textContaining('載具號碼已經隱藏'), findsOneWidget);
     final text = decodeBig5Hkscs(files.bytes!);

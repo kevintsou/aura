@@ -82,14 +82,14 @@ List<CwmRow> readCwmCsv(List<int> bytes) {
   if (format == CwmExportFormat.html) return readCwmHtml(bytes);
   if (format != CwmExportFormat.csv) {
     throw CwmFormatException(switch (format) {
-      CwmExportFormat.xlsx => '這是 Excel 活頁簿，請匯入 CWMoney 原始的 CSV 檔',
-      _ => '無法辨識的檔案格式，請匯入 CWMoney 經典版匯出的 CSV 檔',
+      CwmExportFormat.xlsx => '這是 Excel 活頁簿，請匯入原始的 CSV 檔',
+      _ => '無法辨識的檔案格式，請匯入支援的 CSV 檔',
     });
   }
   final records = decodeBig5Hkscs(bytes).split('\r\n');
   final header = _splitRecord(records.first);
   if (header == null || header.join(',') != cwmColumns.join(',')) {
-    throw CwmFormatException('標題列和 CWMoney 經典版的格式不符');
+    throw CwmFormatException('標題列和支援的格式不符');
   }
   final rows = <CwmRow>[];
   for (var i = 1; i < records.length; i++) {
@@ -154,7 +154,7 @@ List<CwmRow> readCwmHtml(List<int> bytes) {
       [for (final c in _cell.allMatches(r[1]!)) _cellText(c[1]!)],
   ];
   final headerAt = rows.indexWhere((r) => r.length >= 15 && r.take(15).join(',') == cwmColumns.join(','));
-  if (headerAt < 0) throw CwmFormatException('這個 HTML 檔裡找不到 CWMoney 匯出的標題列');
+  if (headerAt < 0) throw CwmFormatException('這個 HTML 檔裡找不到支援的標題列');
   final out = <CwmRow>[];
   for (var i = headerAt + 1; i < rows.length; i++) {
     final r = rows[i];

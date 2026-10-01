@@ -60,7 +60,7 @@ Future<(AppState, _Files)> _open(WidgetTester tester, {void Function(AppState)? 
 /// Picks [bytes] from settings and waits for the next dialog [title].
 Future<void> _import(WidgetTester tester, _Files files, Uint8List bytes, String title) async {
   files.toPick = (name: 'cwmoney.csv', bytes: bytes);
-  await tester.tap(find.text('匯入 CWMoney CSV'));
+  await tester.tap(find.text('匯入 CSV'));
   await _waitFor(tester, find.text(title));
 }
 

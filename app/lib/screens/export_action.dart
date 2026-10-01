@@ -38,8 +38,8 @@ Future<void> exportCwmoneyFile(BuildContext context, AppState app) async {
         [
           name,
           '',
-          '${result.records} 筆紀錄，${result.rows} 列（轉帳在 CWMoney 是兩列）',
-          if (result.replacedCharacters > 0) '有 ${result.replacedCharacters} 個字（例如表情符號）CWMoney 的 Big5 編碼存不下，已經換成「?」。',
+          '${result.records} 筆紀錄，${result.rows} 列（轉帳會拆成兩列）',
+          if (result.replacedCharacters > 0) '有 ${result.replacedCharacters} 個字（例如表情符號）Big5 編碼存不下，已經換成「?」。',
           if (!choice.includeCarrier) '手機條碼載具號碼已經隱藏。',
         ].join('\n'),
         key: const Key('exportSummary'),
@@ -94,13 +94,13 @@ class _ExportDialogState extends State<_ExportDialog> {
       _Range.custom => (_custom?.start, _custom?.end),
     };
     return AlertDialog(
-      title: const Text('匯出 CWMoney CSV'),
+      title: const Text('匯出 CSV'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('和 CWMoney 經典版匯出的格式一樣，可以用 Excel 開啟，或匯入其他支援的 App。'),
+            const Text('可以用 Excel 開啟，或匯入其他支援的 App。'),
             const SizedBox(height: 8),
             RadioGroup<_Range>(
               groupValue: _range,

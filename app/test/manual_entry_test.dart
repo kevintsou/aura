@@ -56,7 +56,7 @@ void main() {
   testWidgets('a blank app offers to start fresh or import', (tester) async {
     final app = await _start(tester, fresh: false);
     expect(find.text('從頭開始記帳'), findsOneWidget);
-    expect(find.text('匯入 CWMoney CSV'), findsOneWidget);
+    expect(find.text('匯入 CSV'), findsOneWidget);
     expect(find.byKey(const Key('addTxn')), findsNothing);
     expect(app.isBlank, isTrue);
   });

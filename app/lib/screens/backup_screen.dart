@@ -229,7 +229,7 @@ String _formatTime(DateTime t) =>
 
 String _reasonLabel(SnapshotReason r) => switch (r) {
   SnapshotReason.daily => '每日自動備份',
-  SnapshotReason.beforeImport => '匯入 CWMoney 之前',
+  SnapshotReason.beforeImport => '匯入 CSV 之前',
   SnapshotReason.beforeRestore => '還原備份之前',
 };
 

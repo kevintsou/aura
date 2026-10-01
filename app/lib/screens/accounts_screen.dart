@@ -58,7 +58,7 @@ class AccountsScreen extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.all(32),
                   child: Text(
-                    '還沒有帳戶。按「新增帳戶」建立，或到「紀錄」選擇從頭開始或匯入 CWMoney。',
+                    '還沒有帳戶。按「新增帳戶」建立，或到「紀錄」選擇從頭開始或匯入 CSV。',
                     textAlign: TextAlign.center,
                   ),
                 ),

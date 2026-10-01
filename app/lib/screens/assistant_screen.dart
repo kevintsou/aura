@@ -193,7 +193,7 @@ class _Welcome extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           count == 0
-              ? '帳本目前是空的。先到「設定」匯入 CWMoney 的 CSV，AI 才有資料可以分析。'
+              ? '帳本目前是空的。先到「設定」匯入 CSV，AI 才有資料可以分析。'
               : '帳本有 $count 筆紀錄。可以這樣問：',
         ),
         const SizedBox(height: 16),

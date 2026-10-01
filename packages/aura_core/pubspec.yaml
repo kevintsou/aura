@@ -1,5 +1,5 @@
 name: aura_core
-description: Aura ledger domain model, queries and CWMoney interop.
+description: Aura ledger domain model, queries and CSV import/export.
 publish_to: none
 version: 0.1.0
 

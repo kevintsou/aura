@@ -217,7 +217,7 @@ class _AccountScreenState extends State<AccountScreen> {
             controller: _name,
             decoration: const InputDecoration(
               labelText: '名稱',
-              helperText: '重新匯入 CWMoney 時，會用名稱對應帳戶',
+              helperText: '重新匯入 CSV 時，會用名稱對應帳戶',
               border: OutlineInputBorder(),
             ),
           ),
