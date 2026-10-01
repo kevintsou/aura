@@ -108,6 +108,8 @@ void main() {
         keyword: rng.nextInt(3) == 0 ? pick(['早', 'ab', 'AB', '加蛋', '%', "'", '_', ' ']) : null,
         searchInvoiceItems: rng.nextBool(),
         excludeAccountIds: rng.nextInt(3) == 0 ? {...ids(mem, 'a').take(1)} : null,
+        minAmount: rng.nextInt(4) == 0 ? money() : null,
+        maxAmount: rng.nextInt(4) == 0 ? money() : null,
       );
 
       // Each operation runs on both stores; both must succeed or both

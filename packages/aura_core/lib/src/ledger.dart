@@ -17,6 +17,8 @@ class TxnFilter {
     this.keyword,
     this.searchInvoiceItems = true,
     this.excludeAccountIds,
+    this.minAmount,
+    this.maxAmount,
   });
 
   final DateTime? from;
@@ -40,6 +42,10 @@ class TxnFilter {
   /// transfer): how hidden accounts stay hidden.
   final Set<String>? excludeAccountIds;
 
+  /// Bounds on [Txn.baseAmount] (inclusive).
+  final Decimal? minAmount;
+  final Decimal? maxAmount;
+
   TxnFilter excluding(Set<String> accountIds) => TxnFilter(
     from: from,
     to: to,
@@ -50,6 +56,8 @@ class TxnFilter {
     keyword: keyword,
     searchInvoiceItems: searchInvoiceItems,
     excludeAccountIds: accountIds.isEmpty ? excludeAccountIds : {...?excludeAccountIds, ...accountIds},
+    minAmount: minAmount,
+    maxAmount: maxAmount,
   );
 }
 
@@ -510,6 +518,8 @@ class InMemoryLedger implements LedgerStore {
           !filter.projectIds!.contains(t.projectId)) {
         return false;
       }
+      if (filter.minAmount case final min? when t.baseAmount < min) return false;
+      if (filter.maxAmount case final max? when t.baseAmount > max) return false;
       if (keyword != null && keyword.isNotEmpty && !_matches(t, keyword, filter.searchInvoiceItems)) {
         return false;
       }

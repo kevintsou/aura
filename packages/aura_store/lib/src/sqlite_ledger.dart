@@ -290,6 +290,16 @@ class SqliteLedger implements LedgerStore {
     if (f.projectIds != null) {
       clauses.add('project_id IN (${marks(f.projectIds!)})');
     }
+    // Amounts are exact decimal text; compared as numbers here (bounds
+    // a person types are well within double precision).
+    if (f.minAmount != null) {
+      clauses.add('CAST(base_amount AS REAL) >= ?');
+      args.add(f.minAmount!.toDouble());
+    }
+    if (f.maxAmount != null) {
+      clauses.add('CAST(base_amount AS REAL) <= ?');
+      args.add(f.maxAmount!.toDouble());
+    }
     final keyword = f.keyword?.trim().toLowerCase();
     if (keyword != null && keyword.isNotEmpty) {
       // instr() rather than LIKE: no wildcard escaping to get wrong.

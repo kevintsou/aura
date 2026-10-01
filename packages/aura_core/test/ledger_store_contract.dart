@@ -487,6 +487,17 @@ void ledgerStoreContract(LedgerStore Function() create) {
     expect(l.transactions().firstWhere((t) => t.id == 't2').location, const GeoPoint(-33.8688, 151.2093));
   });
 
+  test('amount bounds include their ends', () {
+    for (final (id, amount) in [('a', '99.99'), ('b', '100'), ('c', '250.5'), ('d', '-30'), ('e', '1000')]) {
+      l.addTxn(expense(id, amount: amount));
+    }
+    List<String> ids(TxnFilter f) => [for (final t in l.transactions(f)) t.id]..sort();
+    expect(ids(TxnFilter(minAmount: Decimal.fromInt(100))), ['b', 'c', 'e']);
+    expect(ids(TxnFilter(maxAmount: Decimal.parse('250.5'))), ['a', 'b', 'c', 'd']);
+    expect(ids(TxnFilter(minAmount: Decimal.fromInt(100), maxAmount: Decimal.fromInt(300))), ['b', 'c']);
+    expect(l.count(TxnFilter(maxAmount: Decimal.zero)), 1, reason: 'refunds are negative');
+  });
+
   test('meta values are listed', () {
     l
       ..setMeta('a', '1')

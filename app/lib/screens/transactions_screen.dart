@@ -8,6 +8,7 @@ import 'category_picker.dart';
 import 'import_action.dart';
 import 'reports_screen.dart';
 import 'scan_invoice.dart';
+import 'search_screen.dart';
 import 'txn_edit_screen.dart';
 
 class TransactionsScreen extends StatefulWidget {
@@ -73,6 +74,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         appBar: AppBar(
           title: Text(_count == 0 ? '紀錄' : '紀錄（$_count 筆）'),
           actions: [
+            if (_count > 0)
+              IconButton(
+                key: const Key('openSearch'),
+                tooltip: '搜尋紀錄',
+                icon: const Icon(Icons.search),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => SearchScreen(app: widget.app)),
+                ),
+              ),
             if (canRecord)
               IconButton(
                 key: const Key('scanInvoice'),
@@ -97,7 +108,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 itemCount: _count + headers.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, i) =>
-                    i < headers.length ? headers[i] : _TxnTile(app: widget.app, txn: _at(i - headers.length)),
+                    i < headers.length ? headers[i] : TxnTile(app: widget.app, txn: _at(i - headers.length)),
               ),
       );
     },
@@ -196,8 +207,9 @@ class _Empty extends StatelessWidget {
   }
 }
 
-class _TxnTile extends StatelessWidget {
-  const _TxnTile({required this.app, required this.txn});
+/// One record in a list; opens it for editing.
+class TxnTile extends StatelessWidget {
+  const TxnTile({super.key, required this.app, required this.txn});
   final AppState app;
   final Txn txn;
 
