@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../services/reminders.dart';
 import '../format.dart';
 import '../lock/lock_settings_screen.dart';
 import 'ai_settings_screen.dart';
@@ -68,6 +69,7 @@ class SettingsScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => LockSettingsScreen(lock: app.lock)),
             ),
           ),
+          _ReminderTile(app: app),
           SwitchListTile(
             key: const Key('recordLocation'),
             secondary: const Icon(Icons.place_outlined),
@@ -143,4 +145,43 @@ class SettingsScreen extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// 每日記帳提醒: on or off, and at what time.
+class _ReminderTile extends StatelessWidget {
+  const _ReminderTile({required this.app});
+  final AppState app;
+
+  static String _label(ReminderTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pick(BuildContext context, ReminderTime? current) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current?.hour ?? 21, minute: current?.minute ?? 0),
+      helpText: '每天幾點提醒',
+    );
+    if (picked == null || !context.mounted) return;
+    final problem = await app.setReminder((hour: picked.hour, minute: picked.minute));
+    if (problem != null && context.mounted) showMessage(context, problem);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final at = app.reminderTime;
+    return ListTile(
+      key: const Key('reminder'),
+      leading: const Icon(Icons.notifications_outlined),
+      title: const Text('每日記帳提醒'),
+      subtitle: Text(at == null ? '在你設定的時間提醒記帳' : '每天 ${_label(at)}，當天記過帳就不提醒'),
+      onTap: () => _pick(context, at),
+      trailing: Switch(
+        key: const Key('reminderSwitch'),
+        value: at != null,
+        onChanged: (on) async {
+          if (on) return _pick(context, at);
+          await app.setReminder(null);
+        },
+      ),
+    );
+  }
 }

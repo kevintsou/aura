@@ -12,6 +12,7 @@ import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
 import 'services/backup_files.dart';
 import 'services/location_source.dart';
+import 'services/reminders.dart';
 import 'services/photo_picker.dart';
 import 'services/visible_ledger.dart';
 import 'services/snapshot_store.dart';
@@ -95,7 +96,9 @@ class AppState extends ChangeNotifier {
     CloudTargetFactory? cloudTargets,
     PhotoPicker? photoPicker,
     LocationSource? locationSource,
+    ReminderScheduler? reminders,
   }) : lock = lock ?? AppLock.off(),
+       reminders = reminders ?? MemoryReminders(),
        photoPicker = photoPicker ?? DevicePhotoPicker(),
        locationSource = locationSource ?? DeviceLocationSource(),
        _cloudStore = cloudStore ?? MemoryCloudSettingsStore(),
@@ -119,6 +122,45 @@ class AppState extends ChangeNotifier {
 
   final PhotoPicker photoPicker;
   final LocationSource locationSource;
+  final ReminderScheduler reminders;
+
+  static const _metaReminder = 'ui.reminder';
+
+  /// When to remind the user to record, or null when off.
+  ReminderTime? get reminderTime {
+    final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(ledger.meta(_metaReminder) ?? '');
+    return m == null ? null : (hour: int.parse(m[1]!), minute: int.parse(m[2]!));
+  }
+
+  /// Turns the daily reminder on at [time], or off with null. Returns the
+  /// user-facing problem, if any.
+  Future<String?> setReminder(ReminderTime? time) async {
+    if (time != null && !await lock.whileAway(reminders.requestPermission)) {
+      return '沒有通知權限。請到手機的「設定」允許 Aura 傳送通知。';
+    }
+    final error = write(
+      (l) => l.setMeta(
+        _metaReminder,
+        time == null ? null : '${time.hour}:${time.minute.toString().padLeft(2, '0')}',
+      ),
+    );
+    await refreshReminders();
+    return error;
+  }
+
+  /// Something other than a recurring item was recorded for today.
+  bool get recordedToday {
+    final d = clock();
+    final today = DateTime(d.year, d.month, d.day);
+    return ledger.transactions(TxnFilter(from: today, to: today)).any((t) => t.recurringId == null);
+  }
+
+  /// Schedules the coming reminders (none when off). Run at start, when
+  /// the app comes back, and after recording.
+  Future<void> refreshReminders() async {
+    final at = reminderTime;
+    await reminders.schedule(at == null ? const [] : reminderTimes(clock(), at, recordedToday: recordedToday));
+  }
 
   static const _metaRecordLocation = 'ui.recordLocation';
 
@@ -303,7 +345,7 @@ class AppState extends ChangeNotifier {
     required bool isNew,
     List<Uint8List> addPhotos = const [],
     List<String> removePhotos = const [],
-  }) => write((l) {
+  }) => _afterSave(write((l) {
     isNew ? l.addTxn(txn) : l.updateTxn(txn);
     removePhotos.forEach(l.deletePhoto);
     for (final bytes in addPhotos) {
@@ -313,7 +355,13 @@ class AppState extends ChangeNotifier {
     if (txn.categoryId != null) {
       l.setMeta('ui.lastCategory.${txn.kind.name}', txn.categoryId);
     }
-  });
+  }));
+
+  /// Today's reminder goes away once something is recorded.
+  String? _afterSave(String? error) {
+    if (error == null) unawaited(refreshReminders());
+    return error;
+  }
 
   void setBalanceAnchor(String accountId, BalanceAnchor? anchor) {
     ledger.setBalanceAnchor(accountId, anchor);
@@ -343,6 +391,7 @@ class AppState extends ChangeNotifier {
     await cloud.load();
     aiConfig = await settings.loadConfig();
     _apiKey = await settings.loadApiKey(aiConfig.preset);
+    unawaited(refreshReminders());
     notifyListeners();
   }
 
@@ -391,13 +440,13 @@ class AppState extends ChangeNotifier {
   };
 
   /// Deletes a record, remembering its CWMoney rows (see [_deletedRows]).
-  String? deleteTxn(String txnId) => write((l) {
+  String? deleteTxn(String txnId) => _afterSave(write((l) {
     final rows = l.txn(txnId)?.legacyRows ?? const [];
     l.deleteTxn(txnId);
     if (rows.isNotEmpty) {
       l.setMeta(_metaDeletedRows, jsonEncode([..._deletedRows, for (final r in rows) cwmRowKey(r)]));
     }
-  });
+  }));
 
   Future<String?> _replaceWith(CwmImportResult result, String fileName) async {
     _carryOverAccountDetails(result.ledger);
@@ -423,6 +472,7 @@ class AppState extends ChangeNotifier {
       ..setMeta(_metaImportFile, fileName)
       ..setMeta(_metaImportedAt, clock().toIso8601String());
     lastImport = report;
+    unawaited(refreshReminders());
     budgetsDropped = const [];
     recurringDropped = const [];
     anchorsKept = kept;
@@ -501,6 +551,7 @@ class AppState extends ChangeNotifier {
     }
     revision++;
     assistant.reset();
+    unawaited(refreshReminders());
     notifyListeners();
     return contents.info;
   }

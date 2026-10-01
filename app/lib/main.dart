@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -14,6 +15,7 @@ import 'screens/settings_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'services/ai_settings_store.dart';
 import 'services/ledger_store.dart';
+import 'services/reminders.dart';
 import 'services/snapshot_store.dart';
 
 Future<void> main() async {
@@ -27,6 +29,7 @@ Future<void> main() async {
     snapshots: await openSnapshotStore(),
     lock: lock,
     cloudStore: DeviceCloudSettingsStore(),
+    reminders: kIsWeb ? null : DeviceReminders(),
   );
   await app.load();
   // In the background: a slow snapshot must not delay the first frame.
@@ -87,6 +90,7 @@ class _HomeShellState extends State<HomeShell> {
   void _onForeground() {
     if (!mounted) return;
     unawaited(widget.app.cloud.runIfDue());
+    unawaited(widget.app.refreshReminders());
     final run = widget.app.runRecurring();
     final messages = [
       if (run.recorded.isNotEmpty) '已自動記入 ${run.recorded.length} 筆週期收支',
