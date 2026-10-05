@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/amount_list_tile.dart';
 import '../widgets/charts.dart';
 import 'budgets_screen.dart';
 import 'category_picker.dart';
@@ -179,7 +180,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           children: [
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 SegmentedButton<_Span>(
                   key: const Key('spanToggle'),
@@ -192,19 +196,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   selected: {span},
                   onSelectionChanged: (s) => _setSpan(s.single),
                 ),
-                const Spacer(),
-                IconButton(
-                  key: const Key('prevPeriod'),
-                  tooltip: '上一期',
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => _setPeriod(p.previous),
-                ),
-                Text(periodLabel(p), key: const Key('periodLabel'), style: Theme.of(context).textTheme.titleMedium),
-                IconButton(
-                  key: const Key('nextPeriod'),
-                  tooltip: '下一期',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => _setPeriod(p.next),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    IconButton(
+                      key: const Key('prevPeriod'),
+                      tooltip: '上一期',
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: () => _setPeriod(p.previous),
+                    ),
+                    Text(periodLabel(p), key: const Key('periodLabel'), style: Theme.of(context).textTheme.titleMedium),
+                    IconButton(
+                      key: const Key('nextPeriod'),
+                      tooltip: '下一期',
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: () => _setPeriod(p.next),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -359,7 +367,9 @@ class _InsightsCard extends StatelessWidget {
       case InsightKind.overBudget || InsightKind.fastBudget:
         return () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => BudgetsScreen(app: app, month: month)),
+          MaterialPageRoute(
+            builder: (_) => BudgetsScreen(app: app, month: month),
+          ),
         );
       default:
         return null;
@@ -426,34 +436,43 @@ class _KpiRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = data.totals, prev = data.previous;
-    return Row(
-      children: [
-        Expanded(
-          child: _StatTile(
-            key: const Key('kpiExpense'),
-            label: '支出',
-            value: t.expense,
-            change: percentChange(prev.expense, t.expense),
-            upIsGood: false,
-            periodWord: periodWord,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatTile(
-            key: const Key('kpiIncome'),
-            label: '收入',
-            value: t.income,
-            change: percentChange(prev.income, t.income),
-            upIsGood: true,
-            periodWord: periodWord,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatTile(key: const Key('kpiNet'), label: '結餘', value: t.net, periodWord: periodWord),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide = box.maxWidth >= 640 && MediaQuery.textScalerOf(context).scale(18) <= 23;
+        final width = wide ? (box.maxWidth - 24) / 3 : box.maxWidth;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: width,
+              child: _StatTile(
+                key: const Key('kpiExpense'),
+                label: '支出',
+                value: t.expense,
+                change: percentChange(prev.expense, t.expense),
+                upIsGood: false,
+                periodWord: periodWord,
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: _StatTile(
+                key: const Key('kpiIncome'),
+                label: '收入',
+                value: t.income,
+                change: percentChange(prev.income, t.income),
+                upIsGood: true,
+                periodWord: periodWord,
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: _StatTile(key: const Key('kpiNet'), label: '結餘', value: t.net, periodWord: periodWord),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -492,34 +511,25 @@ class _StatTile extends StatelessWidget {
           children: [
             Text(label, style: theme.textTheme.labelLarge),
             const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                formatMoney(value.round(scale: 0)),
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
+            Text(formatMoney(value.round(scale: 0)), style: moneyStyle(context, value, size: 22)),
             if (c != null) ...[
               const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    Icon(
-                      flat ? Icons.remove : (c > 0 ? Icons.arrow_upward : Icons.arrow_downward),
-                      size: 14,
+              Wrap(
+                spacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Icon(
+                    flat ? Icons.remove : (c > 0 ? Icons.arrow_upward : Icons.arrow_downward),
+                    size: 14,
+                    color: flat ? theme.colorScheme.onSurfaceVariant : (good ? colors.good : colors.bad),
+                  ),
+                  Text(
+                    flat ? '與$periodWord持平' : '比$periodWord${c > 0 ? '多' : '少'} ${c.abs().toStringAsFixed(0)}%',
+                    style: theme.textTheme.labelSmall?.copyWith(
                       color: flat ? theme.colorScheme.onSurfaceVariant : (good ? colors.good : colors.bad),
                     ),
-                    Text(
-                      flat ? '與$periodWord持平' : '比$periodWord${c > 0 ? '多' : '少'} ${c.abs().toStringAsFixed(0)}%',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: flat ? theme.colorScheme.onSurfaceVariant : (good ? colors.good : colors.bad),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -637,7 +647,7 @@ class ShareRow extends StatelessWidget {
             Row(
               children: [
                 Expanded(child: Text(label)),
-                Text(formatMoney(total.round(scale: 0)), style: const TextStyle(fontWeight: FontWeight.w600)),
+
                 SizedBox(
                   width: 52,
                   child: Text(
@@ -650,6 +660,8 @@ class ShareRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
+            Text(formatMoney(total.round(scale: 0)), style: moneyStyle(context, total)),
+            const SizedBox(height: 8),
             ShareBar(fraction: fractionOf(total, max)),
           ],
         ),
@@ -686,10 +698,14 @@ class RecordsReportScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Text('${txns.length} 筆', style: theme.textTheme.bodyMedium),
-            Text(formatMoney(total), key: const Key('recordsTotal'), style: theme.textTheme.headlineSmall),
+            Text(
+              formatMoney(total),
+              key: const Key('recordsTotal'),
+              style: theme.textTheme.headlineSmall?.copyWith(color: moneyColor(context, total)),
+            ),
             const SizedBox(height: 16),
             for (final t in txns)
-              ListTile(
+              AmountListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(
                   [
@@ -698,7 +714,7 @@ class RecordsReportScreen extends StatelessWidget {
                   ].whereType<String>().join('・'),
                 ),
                 subtitle: Text(formatDate(t.date)),
-                trailing: Text(formatMoney(t.baseAmount)),
+                trailing: Text(formatMoney(t.baseAmount), style: moneyStyle(context, t.baseAmount)),
                 onTap: () => openTxnEditor(context, app, t),
               ),
           ],

@@ -10,9 +10,7 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-final _sample = File(
-  '../packages/aura_core/test/fixtures/sample_cwmoney.csv',
-).readAsBytesSync();
+final _sample = File('../packages/aura_core/test/fixtures/sample_cwmoney.csv').readAsBytesSync();
 
 class _FakeClient implements AiClient {
   _FakeClient(this.replies);
@@ -21,21 +19,14 @@ class _FakeClient implements AiClient {
   var calls = 0;
 
   @override
-  Future<ChatCompletion> complete({
-    required List<ChatMessage> messages,
-    List<ToolSpec> tools = const [],
-  }) async => replies[calls++ % replies.length];
+  Future<ChatCompletion> complete({required List<ChatMessage> messages, List<ToolSpec> tools = const []}) async =>
+      replies[calls++ % replies.length];
 
   @override
   Future<List<String>> listModels() async => ['gpt-a', 'gpt-b'];
 }
 
-Future<AppState> _app({
-  AiEndpointConfig? config,
-  String? key,
-  _FakeClient? client,
-  LedgerStore? ledger,
-}) async {
+Future<AppState> _app({AiEndpointConfig? config, String? key, _FakeClient? client, LedgerStore? ledger}) async {
   final store = MemoryAiSettingsStore(config: config ?? AiEndpointConfig.defaults);
   if (key != null) store.keys[(config ?? AiEndpointConfig.defaults).preset] = key;
   final fake = client ?? _FakeClient([const ChatCompletion(message: AssistantMessage(content: 'OK'))]);
@@ -144,7 +135,11 @@ void main() {
     expect(find.text('彙總收支'), findsOneWidget);
     expect(find.text('九月支出 NT\$4,010，最多是購物娛樂。'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('彙總收支'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('彙總收支'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('彙總收支'));
     await tester.pumpAndSettle();
     expect(find.text('送給 AI 的資料'), findsOneWidget);
     expect(find.textContaining('"total": 4010'), findsOneWidget);
@@ -240,7 +235,11 @@ void main() {
       await tester.enterText(find.byKey(const Key('balanceAmount')), '1000');
       await tester.pump();
       expect(
-        tester.widget<Text>(find.descendant(of: find.byKey(const Key('previewCurrent')), matching: find.byType(Text)).last).data,
+        tester
+            .widget<Text>(
+              find.descendant(of: find.byKey(const Key('previewCurrent')), matching: find.byType(Text)).last,
+            )
+            .data,
         '-NT\$24,645',
       );
       await tester.tap(find.byKey(const Key('saveAccount')));
@@ -332,9 +331,7 @@ void main() {
       final app = await _app();
       app.ledger.replaceAll(
         InMemoryLedger(
-          accounts: const [
-            Account(id: 'a', name: '外幣帳戶', type: AccountType.bank, currency: unknownCurrency),
-          ],
+          accounts: const [Account(id: 'a', name: '外幣帳戶', type: AccountType.bank, currency: unknownCurrency)],
         ),
       );
       await tester.pumpWidget(AuraApp(app: app));

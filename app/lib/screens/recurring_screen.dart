@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/amount_list_tile.dart';
 import 'category_picker.dart';
 import 'dialogs.dart';
 import 'txn_edit_screen.dart';
@@ -96,12 +97,8 @@ class RecurringScreen extends StatelessWidget {
   Widget _item(BuildContext context, LedgerReader l, Recurring r, ThemeData theme) {
     final t = r.template;
     final currency = l.account(t.accountId!)?.currency ?? baseCurrency;
-    final color = switch (t.kind) {
-      TxnKind.expense => theme.colorScheme.error,
-      TxnKind.income => theme.colorScheme.primary,
-      TxnKind.transfer => theme.colorScheme.onSurfaceVariant,
-    };
-    return ListTile(
+    final color = moneyColor(context, t.amount);
+    return AmountListTile(
       key: Key('recurring-${r.id}'),
       leading: Icon(r.next == null ? Icons.event_available : Icons.event_repeat),
       title: Text(recurringLabel(l, r)),
@@ -109,7 +106,7 @@ class RecurringScreen extends StatelessWidget {
       isThreeLine: true,
       trailing: Text(
         formatMoney(t.amount, currency: currency),
-        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 18),
       ),
       onTap: () => _open(context, recurring: r),
     );
@@ -134,7 +131,7 @@ class _CandidateTile extends StatelessWidget {
       RepeatUnit.year => '每年',
       RepeatUnit.day => '每天',
     };
-    return ListTile(
+    return AmountListTile(
       key: Key('candidate-${c.key}'),
       leading: const Icon(Icons.auto_awesome_outlined),
       title: Text(what.isEmpty ? '未分類' : what),

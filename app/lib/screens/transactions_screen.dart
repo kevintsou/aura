@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/amount_list_tile.dart';
 import 'budgets_screen.dart';
 import 'category_picker.dart';
 import 'import_action.dart';
@@ -34,21 +35,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     _pages.clear();
     final ledger = widget.app.view;
     _count = ledger.count();
-    _review = ledger
-        .transactions(const TxnFilter(kinds: {TxnKind.transfer}))
-        .where((t) => t.needsReview)
-        .length;
+    _review = ledger.transactions(const TxnFilter(kinds: {TxnKind.transfer})).where((t) => t.needsReview).length;
   }
 
   Txn _at(int index) {
     final page = index ~/ _pageSize;
     final rows = _pages.putIfAbsent(
       page,
-      () => widget.app.view.transactions(
-        const TxnFilter(),
-        page * _pageSize,
-        _pageSize,
-      ),
+      () => widget.app.view.transactions(const TxnFilter(), page * _pageSize, _pageSize),
     );
     return rows[index % _pageSize];
   }
@@ -144,11 +138,12 @@ class _DuplicateBanner extends StatelessWidget {
   }
 }
 
-Future<void> openTxnEditor(BuildContext context, AppState app, [Txn? txn]) =>
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => TxnEditScreen(app: app, txn: txn)),
-    );
+Future<void> openTxnEditor(BuildContext context, AppState app, [Txn? txn]) => Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => TxnEditScreen(app: app, txn: txn),
+  ),
+);
 
 class _Empty extends StatelessWidget {
   const _Empty({required this.app});
@@ -221,12 +216,8 @@ class _TxnTile extends StatelessWidget {
       if (txn.invoice?.sellerName != null) txn.invoice!.sellerName!,
       if (txn.note != null) txn.note!,
     ].join('　');
-    final color = switch (txn.kind) {
-      TxnKind.expense => scheme.error,
-      TxnKind.income => scheme.primary,
-      TxnKind.transfer => scheme.onSurfaceVariant,
-    };
-    return ListTile(
+    final color = moneyColor(context, txn.kind == TxnKind.transfer ? txn.amount : txn.baseAmount);
+    return AmountListTile(
       onTap: () => openTxnEditor(context, app, txn),
       leading: txn.needsReview
           ? const Icon(Icons.flag_outlined)
@@ -242,7 +233,7 @@ class _TxnTile extends StatelessWidget {
           txn.kind == TxnKind.transfer ? txn.amount : txn.baseAmount,
           currency: txn.kind == TxnKind.transfer ? account?.currency ?? baseCurrency : baseCurrency,
         ),
-        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 18),
       ),
     );
   }

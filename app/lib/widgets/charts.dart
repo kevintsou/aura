@@ -37,8 +37,7 @@ class ChartColors {
     bad: Color(0xFFD03B3B),
   );
 
-  static ChartColors of(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? _dark : _light;
+  static ChartColors of(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? _dark : _light;
 
   /// The highlighted mark.
   final Color accent;
@@ -103,7 +102,9 @@ class PeriodColumns extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = ChartColors.of(context);
-    final text = Theme.of(context).textTheme.labelSmall!;
+    final scaler = MediaQuery.textScalerOf(context);
+    final text = Theme.of(context).textTheme.bodySmall!.copyWith(fontSize: scaler.scale(14));
+    final scale = scaler.scale(14) / 14;
     return LayoutBuilder(
       builder: (context, box) {
         final painter = _ColumnsPainter(
@@ -114,18 +115,33 @@ class PeriodColumns extends StatelessWidget {
           referenceLabel: referenceLabel,
           referenceColor: Theme.of(context).colorScheme.onSurfaceVariant,
           textStyle: text.copyWith(color: colors.muted),
+          axisWidth: 64 * scale,
+          labelHeight: 40 * scale,
+          topPadding: 28 * scale,
           valueStyle: text.copyWith(
+            fontSize: scaler.scale(16),
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         );
-        return GestureDetector(
+        final width = math.max(box.maxWidth, 64 * scale + months.length * 44 * scale);
+        final chartHeight = height + (scale - 1) * 68;
+        final chart = GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapUp: (d) {
-            final i = painter.indexAt(d.localPosition, Size(box.maxWidth, height));
+            final i = painter.indexAt(d.localPosition, Size(width, chartHeight));
             if (i != null) onSelect(months[i]);
           },
-          child: CustomPaint(size: Size(box.maxWidth, height), painter: painter),
+          child: CustomPaint(size: Size(width, chartHeight), painter: painter),
+        );
+        if (width <= box.maxWidth) return chart;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(scrollDirection: Axis.horizontal, child: chart),
+            const SizedBox(height: 8),
+            Text('左右滑動查看各期', style: Theme.of(context).textTheme.bodySmall),
+          ],
         );
       },
     );
@@ -142,7 +158,12 @@ class _ColumnsPainter extends CustomPainter {
     this.reference,
     this.referenceLabel = '',
     this.referenceColor = const Color(0xFF000000),
-  });
+    required double axisWidth,
+    required double labelHeight,
+    required double topPadding,
+  }) : _axisWidth = axisWidth,
+       _labelHeight = labelHeight,
+       _top = topPadding;
 
   final List<PeriodTotal> months;
   final Period? selected;
@@ -153,9 +174,9 @@ class _ColumnsPainter extends CustomPainter {
   final TextStyle textStyle;
   final TextStyle valueStyle;
 
-  static const _axisWidth = 44.0;
-  static const _labelHeight = 30.0;
-  static const _top = 20.0; // room for the selected column's value
+  final double _axisWidth;
+  final double _labelHeight;
+  final double _top; // room for the selected column's value
 
   double get _max => months.fold(reference ?? 0.0, (m, e) => math.max(m, e.total.toDouble()));
   double get _min => months.fold(0.0, (m, e) => math.min(m, e.total.toDouble()));
@@ -168,9 +189,11 @@ class _ColumnsPainter extends CustomPainter {
     return i >= 0 && i < months.length ? i : null;
   }
 
-  TextPainter _text(String s, {TextAlign align = TextAlign.center}) =>
-      TextPainter(text: TextSpan(text: s, style: textStyle), textDirection: TextDirection.ltr, textAlign: align)
-        ..layout();
+  TextPainter _text(String s, {TextAlign align = TextAlign.center}) => TextPainter(
+    text: TextSpan(text: s, style: textStyle),
+    textDirection: TextDirection.ltr,
+    textAlign: align,
+  )..layout();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -211,7 +234,11 @@ class _ColumnsPainter extends CustomPainter {
         // 4px rounded data end, square at the baseline.
         final rr = v > 0
             ? RRect.fromRectAndCorners(rect, topLeft: const Radius.circular(4), topRight: const Radius.circular(4))
-            : RRect.fromRectAndCorners(rect, bottomLeft: const Radius.circular(4), bottomRight: const Radius.circular(4));
+            : RRect.fromRectAndCorners(
+                rect,
+                bottomLeft: const Radius.circular(4),
+                bottomRight: const Radius.circular(4),
+              );
         // With nothing selected every column is the one series, in the accent.
         canvas.drawRRect(rr, Paint()..color = isSel || selected == null ? colors.accent : colors.muted);
       }
@@ -239,7 +266,10 @@ class _ColumnsPainter extends CustomPainter {
       canvas.drawLine(Offset(x, y), Offset(math.min(x + 4, size.width), y), paint);
     }
     final label = TextPainter(
-      text: TextSpan(text: referenceLabel, style: textStyle.copyWith(color: referenceColor)),
+      text: TextSpan(
+        text: referenceLabel,
+        style: textStyle.copyWith(color: referenceColor),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
     // At the left end, where the oldest (least relevant) column is.
@@ -264,7 +294,9 @@ class _ColumnsPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ColumnsPainter old) =>
-      old.months != months || old.selected != selected || old.colors != colors || old.reference != reference;
+      old.months != months || old.selected != selected || old.colors != colors || old.reference != reference ||
+      old.textStyle != textStyle || old.valueStyle != valueStyle || old._axisWidth != _axisWidth ||
+      old._labelHeight != _labelHeight || old._top != _top;
 
   @override
   bool shouldRebuildSemantics(_ColumnsPainter old) => shouldRepaint(old);
@@ -336,7 +368,8 @@ class BudgetMeter extends StatelessWidget {
     final colors = ChartColors.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      label: '已用 ${(used * 100).round()}%'
+      label:
+          '已用 ${(used * 100).round()}%'
           '${elapsed == null ? '' : '，本月已過 ${(elapsed! * 100).round()}%'}',
       child: SizedBox(
         height: 16,

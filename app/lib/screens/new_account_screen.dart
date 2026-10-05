@@ -39,13 +39,10 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
     super.dispose();
   }
 
-  Decimal? get _amount =>
-      Decimal.tryParse(_balance.text.replaceAll(RegExp(r'[,\s]'), ''));
+  Decimal? get _amount => Decimal.tryParse(_balance.text.replaceAll(RegExp(r'[,\s]'), ''));
 
   bool get _valid =>
-      _name.text.trim().isNotEmpty &&
-      _currency != null &&
-      (_balance.text.trim().isEmpty || _amount != null);
+      _name.text.trim().isNotEmpty && _currency != null && (_balance.text.trim().isEmpty || _amount != null);
 
   void _save() {
     final amount = _amount;
@@ -58,10 +55,7 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
       // on. Back-dated records count as already reflected in it.
       anchor: amount == null
           ? null
-          : BalanceAnchor(
-              amount: amount,
-              date: dateOnly(widget.app.clock()).subtract(const Duration(days: 1)),
-            ),
+          : BalanceAnchor(amount: amount, date: dateOnly(widget.app.clock()).subtract(const Duration(days: 1))),
     );
     final error = widget.app.write((l) {
       l.addAccount(account);
@@ -81,18 +75,18 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
       appBar: AppBar(
         title: const Text('新增帳戶'),
         actions: [
-          TextButton(
-            key: const Key('saveNewAccount'),
-            onPressed: _valid ? _save : null,
-            child: const Text('儲存'),
-          ),
+          TextButton(key: const Key('saveNewAccount'), onPressed: _valid ? _save : null, child: const Text('儲存')),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          AccountIconField(app: widget.app, value: _icon, type: _type,
-            onChanged: (value) => setState(() => _icon = value)),
+          AccountIconField(
+            app: widget.app,
+            value: _icon,
+            type: _type,
+            onChanged: (value) => setState(() => _icon = value),
+          ),
           TextField(
             key: const Key('newAccountName'),
             controller: _name,
@@ -106,20 +100,16 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
           const SizedBox(height: 16),
           AccountTypeField(value: _type, onChanged: (t) => setState(() => _type = t)),
           const SizedBox(height: 16),
-          CurrencyField(
-            initial: baseCurrency,
-            onChanged: (c) => setState(() => _currency = c),
-          ),
+          CurrencyField(initial: baseCurrency, onChanged: (c) => setState(() => _currency = c)),
           const SizedBox(height: 16),
           TextField(
             key: const Key('newAccountBalance'),
+            style: theme.textTheme.titleLarge,
             controller: _balance,
             keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
             decoration: InputDecoration(
               labelText: '目前的餘額（選填）',
-              helperText: _type == AccountType.credit
-                  ? '信用卡欠款請輸入負數'
-                  : '不填的話從 0 開始，之後可以在帳戶裡設定',
+              helperText: _type == AccountType.credit ? '信用卡欠款請輸入負數' : '不填的話從 0 開始，之後可以在帳戶裡設定',
               errorText: _balance.text.isNotEmpty && _amount == null ? '請輸入數字' : null,
               border: const OutlineInputBorder(),
             ),

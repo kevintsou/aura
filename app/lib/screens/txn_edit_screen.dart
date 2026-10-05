@@ -94,9 +94,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     if (t == null) {
       _kind = TxnKind.expense;
       final active = _app.activeAccounts;
-      _accountId = active.any((a) => a.id == _app.lastAccountId)
-          ? _app.lastAccountId
-          : active.firstOrNull?.id;
+      _accountId = active.any((a) => a.id == _app.lastAccountId) ? _app.lastAccountId : active.firstOrNull?.id;
       _categoryId = defaultCategoryId(_ledger, _kind, _app.lastCategoryId(_kind));
       _date = dateOnly(_app.clock());
     } else {
@@ -160,11 +158,9 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
 
   /// A rate is needed to value foreign money in the base currency, unless
   /// a transfer's receiving side already is in it.
-  bool get _needsRate =>
-      _fromCurrency != baseCurrency && !(_crossCurrency && _toCurrency == baseCurrency);
+  bool get _needsRate => _fromCurrency != baseCurrency && !(_crossCurrency && _toCurrency == baseCurrency);
 
-  static Decimal? _parse(TextEditingController c) =>
-      Decimal.tryParse(c.text.replaceAll(RegExp(r'[,\s]'), ''));
+  static Decimal? _parse(TextEditingController c) => Decimal.tryParse(c.text.replaceAll(RegExp(r'[,\s]'), ''));
 
   void _setKind(TxnKind kind) => setState(() {
     _kind = kind;
@@ -177,12 +173,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
   });
 
   Future<void> _chooseCategory() async {
-    final id = await pickCategory(
-      context,
-      ledger: _ledger,
-      kind: _kind,
-      selectedId: _categoryId,
-    );
+    final id = await pickCategory(context, ledger: _ledger, kind: _kind, selectedId: _categoryId);
     if (id != null) setState(() => _categoryId = id);
   }
 
@@ -301,8 +292,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     final (txn, problem) = _build();
     if (problem != null || _unit == null) {
       final error =
-          problem ??
-          _app.saveTxn(txn!, isNew: _isNew, addPhotos: _newPhotos, removePhotos: [..._removedPhotos]);
+          problem ?? _app.saveTxn(txn!, isNew: _isNew, addPhotos: _newPhotos, removePhotos: [..._removedPhotos]);
       if (error != null) {
         setState(() => _error = error);
         return;
@@ -324,10 +314,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          [
-            if (recorded > 0) '已記入 $recorded 筆',
-            next == null ? '週期收支已結束' : '下次 ${formatDate(next)}',
-          ].join('，'),
+          [if (recorded > 0) '已記入 $recorded 筆', next == null ? '週期收支已結束' : '下次 ${formatDate(next)}'].join('，'),
         ),
       ),
     );
@@ -336,13 +323,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
 
   Future<void> _delete() async {
     if (_editingRecurring) {
-      if (!await confirm(
-            context,
-            title: '刪除這個週期收支？',
-            message: '之後不會再自動記帳。已經記下的紀錄會保留。',
-            action: '刪除',
-          ) ||
-          !mounted) {
+      if (!await confirm(context, title: '刪除這個週期收支？', message: '之後不會再自動記帳。已經記下的紀錄會保留。', action: '刪除') || !mounted) {
         return;
       }
       _app.deleteRecurring(widget.recurring!.id);
@@ -377,10 +358,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
       decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
       items: [
         for (final a in accounts)
-          DropdownMenuItem(
-            value: a.id,
-            child: Text(a.currency == baseCurrency ? a.name : '${a.name}（${a.currency}）'),
-          ),
+          DropdownMenuItem(value: a.id, child: Text(a.currency == baseCurrency ? a.name : '${a.name}（${a.currency}）')),
       ],
       onChanged: onChanged,
     );
@@ -483,6 +461,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             const SizedBox(height: 16),
             TextField(
               key: const Key('txnToAmount'),
+              style: theme.textTheme.titleLarge,
               controller: _toAmount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
@@ -496,6 +475,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             const SizedBox(height: 16),
             TextField(
               key: const Key('txnRate'),
+              style: theme.textTheme.titleLarge,
               controller: _rate,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
@@ -524,7 +504,9 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => TxnEditScreen(app: _app, recurring: r)),
+                MaterialPageRoute(
+                  builder: (_) => TxnEditScreen(app: _app, recurring: r),
+                ),
               ),
             ),
           const SizedBox(height: 16),
@@ -535,8 +517,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
             decoration: const InputDecoration(labelText: '專案', border: OutlineInputBorder()),
             items: [
               const DropdownMenuItem<String?>(value: null, child: Text('無')),
-              for (final p in _ledger.projects)
-                DropdownMenuItem<String?>(value: p.id, child: Text(p.name)),
+              for (final p in _ledger.projects) DropdownMenuItem<String?>(value: p.id, child: Text(p.name)),
               const DropdownMenuItem<String?>(value: '__new', child: Text('新增專案…')),
             ],
             onChanged: (v) {
@@ -580,19 +561,17 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, key: const Key('txnError'), style: TextStyle(color: theme.colorScheme.error)),
+            Text(
+              _error!,
+              key: const Key('txnError'),
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
           ],
-          if (invoice != null) ...[
-            const SizedBox(height: 16),
-            _InvoiceCard(invoice: invoice),
-          ],
+          if (invoice != null) ...[const SizedBox(height: 16), _InvoiceCard(invoice: invoice)],
           if (_old?.needsReview ?? false)
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                '這筆轉帳在匯入時只找到一邊。補上另一個帳戶並儲存後，就不再標記待確認。',
-                style: theme.textTheme.bodySmall,
-              ),
+              child: Text('這筆轉帳在匯入時只找到一邊。補上另一個帳戶並儲存後，就不再標記待確認。', style: theme.textTheme.bodySmall),
             ),
         ],
       ),
@@ -689,8 +668,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
       children: [
         for (final id in _keptPhotoIds)
           if (_ledger.photo(id) case final p?) thumb(p.bytes, () => _removedPhotos.add(id), Key('photo-$id')),
-        for (final (i, bytes) in _newPhotos.indexed)
-          thumb(bytes, () => _newPhotos.removeAt(i), Key('newPhoto-$i')),
+        for (final (i, bytes) in _newPhotos.indexed) thumb(bytes, () => _newPhotos.removeAt(i), Key('newPhoto-$i')),
         SizedBox(
           width: 72,
           height: 72,
@@ -713,12 +691,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     return id == null ? null : _ledger.recurrings.where((r) => r.id == id).firstOrNull;
   }
 
-  static const _unitNames = {
-    RepeatUnit.day: '天',
-    RepeatUnit.week: '週',
-    RepeatUnit.month: '個月',
-    RepeatUnit.year: '年',
-  };
+  static const _unitNames = {RepeatUnit.day: '天', RepeatUnit.week: '週', RepeatUnit.month: '個月', RepeatUnit.year: '年'};
 
   List<Widget> _repeatFields(ThemeData theme) {
     final unit = _unit;
@@ -746,10 +719,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
                 key: const Key('repeatEvery'),
                 controller: _every,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: '每幾${_unitNames[unit]}',
-                  border: const OutlineInputBorder(),
-                ),
+                decoration: InputDecoration(labelText: '每幾${_unitNames[unit]}', border: const OutlineInputBorder()),
               ),
             ),
             const SizedBox(width: 12),
@@ -824,12 +794,7 @@ class _TxnEditScreenState extends State<TxnEditScreen> {
     return [
       describeRepeat(r),
       if (r.unit == RepeatUnit.month && r.start.day > 28) '沒有 ${r.start.day} 日的月份記在月底',
-      if (due > 0)
-        '儲存後會記入到今天為止的 $due 筆'
-      else if (r.next != null)
-        '下次 ${formatDate(r.next!)} 自動記入'
-      else
-        '已經沒有下一次',
+      if (due > 0) '儲存後會記入到今天為止的 $due 筆' else if (r.next != null) '下次 ${formatDate(r.next!)} 自動記入' else '已經沒有下一次',
     ].join('。');
   }
 
@@ -863,7 +828,7 @@ class _InvoiceCard extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(child: Text('${i.name} ×${i.quantity}')),
-                  Text(formatMoney(i.amount)),
+                  Text(formatMoney(i.amount), style: moneyStyle(context, i.amount)),
                 ],
               ),
             ),

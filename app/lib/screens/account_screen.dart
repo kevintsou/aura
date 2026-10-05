@@ -15,11 +15,7 @@ enum _Mode { today, opening, onDate }
 /// balance: today's, the opening one, or the one on a chosen day.
 /// Derived figures are previewed live.
 class AccountScreen extends StatefulWidget {
-  const AccountScreen({
-    super.key,
-    required this.app,
-    required this.accountId,
-  });
+  const AccountScreen({super.key, required this.app, required this.accountId});
 
   final AppState app;
   final String accountId;
@@ -47,10 +43,7 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   void initState() {
     super.initState();
-    _flows = _app.ledger
-        .accountFlows()
-        .where((f) => f.accountId == widget.accountId)
-        .toList();
+    _flows = _app.ledger.accountFlows().where((f) => f.accountId == widget.accountId).toList();
     _date = _saved.anchor?.date ?? _today;
     if (_saved.isSet) _amount.text = _saved.current.toString();
     _amount.addListener(() => setState(() {}));
@@ -80,8 +73,7 @@ class _AccountScreenState extends State<AccountScreen> {
   /// Whether saving would change the account's balances.
   bool get _balanceChanged {
     final p = _preview;
-    return p != null &&
-        (!_saved.isSet || p.current != _saved.current || p.opening != _saved.opening);
+    return p != null && (!_saved.isSet || p.current != _saved.current || p.opening != _saved.opening);
   }
 
   bool get _canSave =>
@@ -90,8 +82,7 @@ class _AccountScreenState extends State<AccountScreen> {
       (_amount.text.trim().isEmpty || _entered != null) &&
       (_detailsChanged || _balanceChanged);
 
-  Decimal? get _entered =>
-      Decimal.tryParse(_amount.text.replaceAll(RegExp(r'[,\s]|NT\$'), ''));
+  Decimal? get _entered => Decimal.tryParse(_amount.text.replaceAll(RegExp(r'[,\s]|NT\$'), ''));
 
   BalanceAnchor? get _candidate {
     final amount = _entered;
@@ -105,9 +96,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   AccountBalance? get _preview {
     final c = _candidate;
-    return c == null
-        ? null
-        : balanceOf(_account, _flows, today: _today, anchor: c);
+    return c == null ? null : balanceOf(_account, _flows, today: _today, anchor: c);
   }
 
   String get _amountLabel => switch (_mode) {
@@ -132,12 +121,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final anchor = _balanceChanged ? _candidate : null;
     if (_detailsChanged) {
       final error = _app.write(
-        (l) => l.updateAccount(
-          widget.accountId,
-          name: _newName,
-          type: _type,
-          currency: _currency,
-        ),
+        (l) => l.updateAccount(widget.accountId, name: _newName, type: _type, currency: _currency),
       );
       if (error != null) {
         setState(() => _error = error);
@@ -145,7 +129,10 @@ class _AccountScreenState extends State<AccountScreen> {
       }
     }
     final iconError = _app.write((l) => l.setMeta(accountIconKey(widget.accountId), _icon));
-    if (iconError != null) { setState(() => _error = iconError); return; }
+    if (iconError != null) {
+      setState(() => _error = iconError);
+      return;
+    }
     if (anchor != null) _app.setBalanceAnchor(widget.accountId, anchor);
     Navigator.pop(context);
   }
@@ -156,8 +143,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _delete() async {
-    if (!await confirm(context, title: '刪除「${_account.name}」？', action: '刪除') ||
-        !mounted) {
+    if (!await confirm(context, title: '刪除「${_account.name}」？', action: '刪除') || !mounted) {
       return;
     }
     final error = _app.write((l) => l.deleteAccount(widget.accountId));
@@ -185,25 +171,16 @@ class _AccountScreenState extends State<AccountScreen> {
       appBar: AppBar(
         title: Text(a.name),
         actions: [
-          TextButton(
-            key: const Key('saveAccount'),
-            onPressed: _canSave ? _save : null,
-            child: const Text('儲存'),
-          ),
+          TextButton(key: const Key('saveAccount'), onPressed: _canSave ? _save : null, child: const Text('儲存')),
           PopupMenuButton<VoidCallback>(
             key: const Key('accountMenu'),
             onSelected: (action) => action(),
             itemBuilder: (_) => [
-              PopupMenuItem(
-                value: _toggleArchived,
-                child: Text(a.archived ? '取消封存' : '封存帳戶'),
-              ),
+              PopupMenuItem(value: _toggleArchived, child: Text(a.archived ? '取消封存' : '封存帳戶')),
               PopupMenuItem(
                 value: _delete,
                 enabled: _saved.flowCount == 0,
-                child: Text(
-                  _saved.flowCount == 0 ? '刪除帳戶' : '刪除帳戶（有紀錄，請改用封存）',
-                ),
+                child: Text(_saved.flowCount == 0 ? '刪除帳戶' : '刪除帳戶（有紀錄，請改用封存）'),
               ),
             ],
           ),
@@ -218,8 +195,7 @@ class _AccountScreenState extends State<AccountScreen> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          AccountIconField(app: _app, value: _icon, type: _type,
-            onChanged: (value) => setState(() => _icon = value)),
+          AccountIconField(app: _app, value: _icon, type: _type, onChanged: (value) => setState(() => _icon = value)),
           TextField(
             key: const Key('accountName'),
             controller: _name,
@@ -230,23 +206,20 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: AccountTypeField(
-                  value: _type,
-                  onChanged: (t) => setState(() => _type = t),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: CurrencyField(
-                  initial: a.currency,
-                  onChanged: (c) => setState(() => _currency = c),
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, box) {
+              final type = AccountTypeField(value: _type, onChanged: (t) => setState(() => _type = t));
+              final currency = CurrencyField(initial: a.currency, onChanged: (c) => setState(() => _currency = c));
+              if (box.maxWidth < 480) return Column(children: [type, const SizedBox(height: 16), currency]);
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: type),
+                  const SizedBox(width: 12),
+                  Expanded(child: currency),
+                ],
+              );
+            },
           ),
           if (a.archived)
             Padding(
@@ -264,10 +237,7 @@ class _AccountScreenState extends State<AccountScreen> {
           if (_currency != null && _currency != a.currency)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '只會更改幣別標示，金額數字不會換算。',
-                style: theme.textTheme.bodySmall,
-              ),
+              child: Text('只會更改幣別標示，金額數字不會換算。', style: theme.textTheme.bodySmall),
             ),
           if (_error != null)
             Padding(
@@ -277,14 +247,17 @@ class _AccountScreenState extends State<AccountScreen> {
           const SizedBox(height: 24),
           Text('餘額', style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
-          SegmentedButton<_Mode>(
-            segments: const [
-              ButtonSegment(value: _Mode.today, label: Text('今天')),
-              ButtonSegment(value: _Mode.opening, label: Text('期初')),
-              ButtonSegment(value: _Mode.onDate, label: Text('指定日期')),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => setState(() => _mode = s.single),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton<_Mode>(
+              segments: const [
+                ButtonSegment(value: _Mode.today, label: Text('今天')),
+                ButtonSegment(value: _Mode.opening, label: Text('期初')),
+                ButtonSegment(value: _Mode.onDate, label: Text('指定日期')),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (s) => setState(() => _mode = s.single),
+            ),
           ),
           if (_mode == _Mode.onDate)
             ListTile(
@@ -297,20 +270,14 @@ class _AccountScreenState extends State<AccountScreen> {
           const SizedBox(height: 16),
           TextField(
             key: const Key('balanceAmount'),
+            style: theme.textTheme.titleLarge,
             controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(
-              signed: true,
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
             decoration: InputDecoration(
               labelText: _amountLabel,
               prefixText: currency == baseCurrency ? 'NT\$ ' : '$currency ',
-              helperText: isCredit
-                  ? '信用卡欠款請輸入負數，例如 -12000'
-                  : '例如網銀或存摺上顯示的金額',
-              errorText: _amount.text.isNotEmpty && _entered == null
-                  ? '請輸入數字'
-                  : null,
+              helperText: isCredit ? '信用卡欠款請輸入負數，例如 -12000' : '例如網銀或存摺上顯示的金額',
+              errorText: _amount.text.isNotEmpty && _entered == null ? '請輸入數字' : null,
               border: const OutlineInputBorder(),
             ),
           ),
@@ -321,24 +288,19 @@ class _AccountScreenState extends State<AccountScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    preview == null ? '目前' : '儲存後',
-                    style: theme.textTheme.labelLarge,
-                  ),
+                  Text(preview == null ? '目前' : '儲存後', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 8),
-                  _Row('期初餘額', money((preview ?? _saved).opening)),
+                  _Row('期初餘額', money((preview ?? _saved).opening), amount: (preview ?? _saved).opening),
                   _Row(
                     '今天的餘額',
                     money((preview ?? _saved).current),
+                    amount: (preview ?? _saved).current,
                     key: const Key('previewCurrent'),
                   ),
                   if (preview == null && !_saved.isSet)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        '尚未設定，期初餘額暫時當作 0。',
-                        style: theme.textTheme.bodySmall,
-                      ),
+                      child: Text('尚未設定，期初餘額暫時當作 0。', style: theme.textTheme.bodySmall),
                     ),
                 ],
               ),
@@ -346,11 +308,7 @@ class _AccountScreenState extends State<AccountScreen> {
           ),
           if (_saved.isSet) ...[
             const SizedBox(height: 16),
-            TextButton.icon(
-              onPressed: _clear,
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('清除餘額設定'),
-            ),
+            TextButton.icon(onPressed: _clear, icon: const Icon(Icons.restart_alt), label: const Text('清除餘額設定')),
           ],
         ],
       ),
@@ -359,18 +317,30 @@ class _AccountScreenState extends State<AccountScreen> {
 }
 
 class _Row extends StatelessWidget {
-  const _Row(this.label, this.value, {super.key});
+  const _Row(this.label, this.value, {super.key, required this.amount});
   final String label;
   final String value;
+  final Decimal amount;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(
-      children: [
-        Expanded(child: Text(label)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ],
+    child: LayoutBuilder(
+      builder: (context, box) => box.maxWidth < 480
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label),
+                const SizedBox(height: 4),
+                Text(value, style: moneyStyle(context, amount)),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: Text(label)),
+                Text(value, style: moneyStyle(context, amount)),
+              ],
+            ),
     ),
   );
 }

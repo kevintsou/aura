@@ -19,10 +19,7 @@ import 'services/snapshot_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final lock = AppLock(
-    store: DeviceLockStore(),
-    biometrics: DeviceBiometrics(),
-  );
+  final lock = AppLock(store: DeviceLockStore(), biometrics: DeviceBiometrics());
   // Before the first frame, so a locked app never shows its data.
   await lock.load();
   final app = AppState(
@@ -46,12 +43,22 @@ class AuraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ThemeData theme(Brightness b) => ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF3B6E8F),
-        brightness: b,
-      ),
-    );
+    ThemeData theme(Brightness b) {
+      final base = ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3B6E8F), brightness: b),
+      );
+      return base.copyWith(
+        textTheme: base.textTheme.copyWith(
+          bodyLarge: base.textTheme.bodyLarge?.copyWith(fontSize: 18),
+          bodyMedium: base.textTheme.bodyMedium?.copyWith(fontSize: 16),
+          bodySmall: base.textTheme.bodySmall?.copyWith(fontSize: 14),
+          labelSmall: base.textTheme.labelSmall?.copyWith(fontSize: 14),
+          labelMedium: base.textTheme.labelMedium?.copyWith(fontSize: 14),
+          titleSmall: base.textTheme.titleSmall?.copyWith(fontSize: 16),
+        ),
+      );
+    }
+
     return ListenableBuilder(
       listenable: app.theme,
       builder: (context, _) => MaterialApp(
@@ -102,8 +109,7 @@ class _HomeShellState extends State<HomeShell> {
     final run = widget.app.runRecurring();
     final messages = [
       if (run.recorded.isNotEmpty) '已自動記入 ${run.recorded.length} 筆週期收支',
-      if (run.problems.isNotEmpty)
-        '有 ${run.problems.length} 個週期收支無法記帳，請到「設定 → 週期收支」檢查',
+      if (run.problems.isNotEmpty) '有 ${run.problems.length} 個週期收支無法記帳，請到「設定 → 週期收支」檢查',
     ];
     if (messages.isEmpty) return;
     ScaffoldMessenger.of(context)
@@ -129,26 +135,11 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: tab,
         onDestinationSelected: (i) => widget.app.tab.value = i,
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            label: '紀錄',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.insights_outlined),
-            label: '報表',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: '帳戶',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            label: 'AI 助理',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: '設定',
-          ),
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: '紀錄'),
+          NavigationDestination(icon: Icon(Icons.insights_outlined), label: '報表'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '帳戶'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI 助理'),
+          NavigationDestination(icon: Icon(Icons.settings_outlined), label: '設定'),
         ],
       ),
     ),

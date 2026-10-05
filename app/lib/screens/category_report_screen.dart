@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/amount_list_tile.dart';
 import 'reports_screen.dart';
 import 'transactions_screen.dart';
 
@@ -32,12 +33,7 @@ class CategoryReportScreen extends StatelessWidget {
       final subs = main == null ? const <CategoryTotal>[] : byCategory(l, period, kind, parentId: main!.id);
       final txns = [
         for (final t in l.transactions(
-          TxnFilter(
-            from: period.from,
-            to: period.to,
-            kinds: {kind},
-            categoryIds: main == null ? null : {main!.id},
-          ),
+          TxnFilter(from: period.from, to: period.to, kinds: {kind}, categoryIds: main == null ? null : {main!.id}),
         ))
           if (main != null || t.categoryId == null) t,
       ];
@@ -51,21 +47,20 @@ class CategoryReportScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Text('$label・${txns.length} 筆', style: theme.textTheme.bodyMedium),
-            Text(formatMoney(total), key: const Key('categoryTotal'), style: theme.textTheme.headlineSmall),
+            Text(
+              formatMoney(total),
+              key: const Key('categoryTotal'),
+              style: theme.textTheme.headlineSmall?.copyWith(color: moneyColor(context, total)),
+            ),
             if (subs.length > 1 || (subs.length == 1 && subs.single.category?.id != main?.id)) ...[
               const SizedBox(height: 16),
               Text('子分類', style: theme.textTheme.titleSmall),
-              for (final r in subs)
-                CategoryRow(
-                  row: r,
-                  max: max,
-                  label: r.category?.id == main?.id ? '（未細分）' : null,
-                ),
+              for (final r in subs) CategoryRow(row: r, max: max, label: r.category?.id == main?.id ? '（未細分）' : null),
             ],
             const SizedBox(height: 16),
             Text('紀錄', style: theme.textTheme.titleSmall),
             for (final t in txns)
-              ListTile(
+              AmountListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(
                   [
@@ -74,7 +69,7 @@ class CategoryReportScreen extends StatelessWidget {
                   ].whereType<String>().join('・'),
                 ),
                 subtitle: Text(formatDate(t.date)),
-                trailing: Text(formatMoney(t.baseAmount)),
+                trailing: Text(formatMoney(t.baseAmount), style: moneyStyle(context, t.baseAmount)),
                 onTap: () => openTxnEditor(context, app, t),
               ),
           ],

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/amount_list_tile.dart';
 import '../widgets/charts.dart';
 import 'category_picker.dart';
 import 'category_report_screen.dart';
@@ -107,10 +108,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
                 ),
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '直線是今天：長條超過直線，代表花得比日子過得快。',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                child: Text('直線是今天：長條超過直線，代表花得比日子過得快。', style: Theme.of(context).textTheme.bodySmall),
               ),
             ],
           ],
@@ -162,19 +160,21 @@ class BudgetCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: Text(budgetName(s), style: theme.textTheme.titleSmall)),
+              Text(budgetName(s), style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
               Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(
-                      text: formatMoney(s.spent.round(scale: 0)),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    TextSpan(text: formatMoney(s.spent.round(scale: 0)), style: moneyStyle(context, s.spent)),
                     TextSpan(
                       text: ' / ${formatMoney(s.amount)}',
-                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontSize: 18,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -208,7 +208,7 @@ class BudgetStatusLine extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = ChartColors.of(context);
     final s = status;
-    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final muted = theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     final (IconData? icon, String text, Color? color) = switch (s) {
       _ when s.over => (Icons.error_outline, '超支 ${formatMoney((-s.remaining).round(scale: 0))}', colors.bad),
       _ when s.daysLeft > 0 => (
@@ -227,7 +227,9 @@ class BudgetStatusLine extends StatelessWidget {
           Icon(icon, size: 16, color: color ?? theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: 4),
         ],
-        Expanded(child: Text(text, style: muted?.copyWith(color: color))),
+        Expanded(
+          child: Text(text, style: muted?.copyWith(color: color)),
+        ),
         Text('${(s.used * 100).round()}%', style: muted),
       ],
     );
@@ -328,7 +330,7 @@ class BudgetDetailScreen extends StatelessWidget {
               for (final t in l.transactions(
                 TxnFilter(from: month.from, to: month.to, kinds: const {TxnKind.expense}, categoryIds: {categoryId}),
               ))
-                ListTile(
+                AmountListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     [
@@ -337,7 +339,7 @@ class BudgetDetailScreen extends StatelessWidget {
                     ].whereType<String>().join('・'),
                   ),
                   subtitle: Text(formatDate(t.date)),
-                  trailing: Text(formatMoney(t.baseAmount)),
+                  trailing: Text(formatMoney(t.baseAmount), style: moneyStyle(context, t.baseAmount)),
                   onTap: () => openTxnEditor(context, app, t),
                 ),
             ],
@@ -388,7 +390,9 @@ class _BudgetEditorState extends State<_BudgetEditor> {
   late final _amount = TextEditingController(text: widget.existing?.amount.toString() ?? '');
 
   /// Null for the whole-month total.
-  late String? _categoryId = widget.existing != null ? widget.existing!.categoryId : (widget.total ? null : _firstFree());
+  late String? _categoryId = widget.existing != null
+      ? widget.existing!.categoryId
+      : (widget.total ? null : _firstFree());
   String? _error;
 
   AppState get _app => widget.app;
