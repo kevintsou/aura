@@ -5,11 +5,13 @@ import 'package:aura_ai/aura_ai.dart';
 import 'package:aura_core/aura_core.dart';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart' hide Category;
+import 'package:flutter/material.dart' show ThemeMode;
 
 import 'cloud/cloud_backup.dart';
 import 'cloud/google_drive.dart';
 import 'lock/app_lock.dart';
 import 'services/ai_settings_store.dart';
+import 'services/theme_settings_store.dart';
 import 'services/backup_files.dart';
 import 'services/location_source.dart';
 import 'services/photo_picker.dart';
@@ -57,13 +59,21 @@ Future<Uint8List> _encode(
 );
 
 Future<CwmExportResult> _exportCwm(
-  ({InMemoryLedger ledger, DateTime? from, DateTime? to, bool includeCarrier}) job,
-) async => exportCwmoneyCsv(job.ledger, from: job.from, to: job.to, includeCarrier: job.includeCarrier);
+  ({InMemoryLedger ledger, DateTime? from, DateTime? to, bool includeCarrier})
+  job,
+) async => exportCwmoneyCsv(
+  job.ledger,
+  from: job.from,
+  to: job.to,
+  includeCarrier: job.includeCarrier,
+);
 
 Future<BackupContents> _decode(({List<int> bytes, String? password}) job) =>
     decodeBackup(job.bytes, password: job.password);
 
-(CwmImportResult, CwmMergePlan) _readAndPlan(({List<int> bytes, InMemoryLedger current}) job) {
+(CwmImportResult, CwmMergePlan) _readAndPlan(
+  ({List<int> bytes, InMemoryLedger current}) job,
+) {
   final result = importCwmoneyCsv(job.bytes);
   return (result, planCwmoneyMerge(job.current, result.ledger));
 }
@@ -84,6 +94,7 @@ class AppState extends ChangeNotifier {
   AppState({
     required this.ledger,
     required this.settings,
+    ThemeSettingsStore? themeSettings,
     BackupFiles? files,
     SnapshotStore? snapshots,
     this.clientFactory = _defaultClient,
@@ -95,7 +106,8 @@ class AppState extends ChangeNotifier {
     CloudTargetFactory? cloudTargets,
     PhotoPicker? photoPicker,
     LocationSource? locationSource,
-  }) : lock = lock ?? AppLock.off(),
+  }) : themeSettings = themeSettings ?? MemoryThemeSettingsStore(),
+       lock = lock ?? AppLock.off(),
        photoPicker = photoPicker ?? DevicePhotoPicker(),
        locationSource = locationSource ?? DeviceLocationSource(),
        _cloudStore = cloudStore ?? MemoryCloudSettingsStore(),
@@ -113,6 +125,15 @@ class AppState extends ChangeNotifier {
   /// Persistent on devices (SQLite), in memory on the web and in tests.
   final LedgerStore ledger;
   final AiSettingsStore settings;
+  final ThemeSettingsStore themeSettings;
+  final theme = ValueNotifier<ThemeMode>(ThemeMode.system);
+  ThemeMode get themeMode => theme.value;
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    await themeSettings.save(mode);
+    theme.value = mode;
+    notifyListeners();
+  }
 
   /// PIN / biometric lock in front of the whole app.
   final AppLock lock;
@@ -320,6 +341,7 @@ class AppState extends ChangeNotifier {
     revision++;
     notifyListeners();
   }
+
   String? get importedFileName => ledger.meta(_metaImportFile);
 
   AiEndpointConfig aiConfig = AiEndpointConfig.defaults;
@@ -340,6 +362,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    theme.value = await themeSettings.load();
     await cloud.load();
     aiConfig = await settings.loadConfig();
     _apiKey = await settings.loadApiKey(aiConfig.preset);
@@ -360,20 +383,35 @@ class AppState extends ChangeNotifier {
 
   /// Reads a CWMoney export and works out what merging it would add,
   /// without changing anything. Throws [CwmFormatException].
-  Future<CwmImportPreview> previewCwmoney(List<int> bytes, String fileName) async {
-    final (result, plan) = await compute(_readAndPlan, (bytes: bytes, current: _detached(ledger)));
+  Future<CwmImportPreview> previewCwmoney(
+    List<int> bytes,
+    String fileName,
+  ) async {
+    final (result, plan) = await compute(_readAndPlan, (
+      bytes: bytes,
+      current: _detached(ledger),
+    ));
     return CwmImportPreview(fileName, result, plan);
   }
 
   /// Replaces the ledger with a previewed export.
-  Future<String?> replaceWithCwmoney(CwmImportPreview preview) => _replaceWith(preview.result, preview.fileName);
+  Future<String?> replaceWithCwmoney(CwmImportPreview preview) =>
+      _replaceWith(preview.result, preview.fileName);
 
   /// Adds the new records of a previewed export to the ledger. Returns an
   /// error message, or null on success.
-  Future<String?> mergeCwmoney(CwmImportPreview preview, {bool skipPossibleDuplicates = true}) async {
+  Future<String?> mergeCwmoney(
+    CwmImportPreview preview, {
+    bool skipPossibleDuplicates = true,
+  }) async {
     await takeSnapshot(SnapshotReason.beforeImport);
     try {
-      ledger.replaceAll(preview.plan.applyTo(ledger, skipPossibleDuplicates: skipPossibleDuplicates));
+      ledger.replaceAll(
+        preview.plan.applyTo(
+          ledger,
+          skipPossibleDuplicates: skipPossibleDuplicates,
+        ),
+      );
     } on Exception catch (e) {
       return '寫入資料庫失敗：$e';
     }
@@ -398,7 +436,12 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  void _importDone(String fileName, CwmImportReport report, List<String> kept, List<String> dropped) {
+  void _importDone(
+    String fileName,
+    CwmImportReport report,
+    List<String> kept,
+    List<String> dropped,
+  ) {
     ledger
       ..setMeta(_metaImportFile, fileName)
       ..setMeta(_metaImportedAt, clock().toIso8601String());
@@ -422,7 +465,8 @@ class AppState extends ChangeNotifier {
   bool get backupOverdue {
     if (ledger.count() == 0) return false;
     final times = [?lastBackupAt, ?cloud.config.lastSuccess];
-    return times.isEmpty || times.every((t) => clock().difference(t).inDays >= 30);
+    return times.isEmpty ||
+        times.every((t) => clock().difference(t).inDays >= 30);
   }
 
   Future<Uint8List> _encodeCurrent({String? password}) => compute(_encode, (
@@ -441,7 +485,8 @@ class AppState extends ChangeNotifier {
   Future<String?> exportBackup({String? password}) async {
     final bytes = await _encodeCurrent(password: password);
     final now = clock();
-    final name = 'aura-${now.year}${_two(now.month)}${_two(now.day)}-'
+    final name =
+        'aura-${now.year}${_two(now.month)}${_two(now.day)}-'
         '${_two(now.hour)}${_two(now.minute)}.$backupExtension';
     if (!await lock.whileAway(() => files.save(name, bytes))) return null;
     ledger.setMeta(_metaLastBackup, now.toIso8601String());
@@ -451,7 +496,11 @@ class AppState extends ChangeNotifier {
 
   /// Writes the ledger (or [from]–[to]) as a CWMoney CSV and lets the
   /// user choose where to save it. Null when they cancelled.
-  Future<(String, CwmExportResult)?> exportCwmoney({DateTime? from, DateTime? to, bool includeCarrier = false}) async {
+  Future<(String, CwmExportResult)?> exportCwmoney({
+    DateTime? from,
+    DateTime? to,
+    bool includeCarrier = false,
+  }) async {
     final result = await compute(_exportCwm, (
       ledger: _detached(ledger),
       from: from,
@@ -461,7 +510,11 @@ class AppState extends ChangeNotifier {
     final now = clock();
     // CWMoney's own naming, so the file is easy to recognise.
     final name = 'aura_${now.year}${_two(now.month)}${_two(now.day)}.csv';
-    if (!await lock.whileAway(() => files.save(name, result.bytes, title: '儲存 CSV'))) return null;
+    if (!await lock.whileAway(
+      () => files.save(name, result.bytes, title: '儲存 CSV'),
+    )) {
+      return null;
+    }
     return (name, result);
   }
 
@@ -515,8 +568,9 @@ class AppState extends ChangeNotifier {
   /// Moves budgets over to the categories of a freshly imported ledger
   /// with the same names. Returns the names of those left without one.
   List<String> _carryOverBudgets(InMemoryLedger imported) {
-    String path(LedgerReader l, Category c) =>
-        c.parentId == null ? c.name : '${l.category(c.parentId!)?.name}/${c.name}';
+    String path(LedgerReader l, Category c) => c.parentId == null
+        ? c.name
+        : '${l.category(c.parentId!)?.name}/${c.name}';
     final byPath = {
       for (final c in imported.categories)
         if (c.kind == TxnKind.expense) path(imported, c): c.id,
@@ -529,7 +583,9 @@ class AppState extends ChangeNotifier {
         dropped.add(path(ledger, c));
         continue;
       }
-      imported.setBudget(Budget(id: b.id, amount: b.amount, categoryId: target));
+      imported.setBudget(
+        Budget(id: b.id, amount: b.amount, categoryId: target),
+      );
     }
     return dropped;
   }
@@ -541,17 +597,26 @@ class AppState extends ChangeNotifier {
     String path(LedgerReader l, Category c) =>
         '${c.kind.name}/${c.parentId == null ? '' : l.category(c.parentId!)?.name}/${c.name}';
     final accounts = {for (final a in imported.accounts) a.name: a.id};
-    final categories = {for (final c in imported.categories) path(imported, c): c.id};
+    final categories = {
+      for (final c in imported.categories) path(imported, c): c.id,
+    };
     final projects = {for (final p in imported.projects) p.name: p.id};
     final dropped = <String>[];
     for (final r in ledger.recurrings) {
       final t = r.template;
-      String? account(String? id) => id == null ? null : accounts[ledger.account(id)?.name];
-      final category = t.categoryId == null ? null : ledger.category(t.categoryId!);
+      String? account(String? id) =>
+          id == null ? null : accounts[ledger.account(id)?.name];
+      final category = t.categoryId == null
+          ? null
+          : ledger.category(t.categoryId!);
       final project = t.projectId == null ? null : ledger.project(t.projectId!);
       final from = account(t.accountId), to = account(t.toAccountId);
-      final categoryId = category == null ? null : categories[path(ledger, category)];
-      if (from == null || (t.toAccountId != null && to == null) || (category != null && categoryId == null)) {
+      final categoryId = category == null
+          ? null
+          : categories[path(ledger, category)];
+      if (from == null ||
+          (t.toAccountId != null && to == null) ||
+          (category != null && categoryId == null)) {
         dropped.add(recurringLabel(ledger, r));
         continue;
       }
@@ -608,7 +673,8 @@ class AppState extends ChangeNotifier {
     return (null, runRecurring().recorded.length);
   }
 
-  void deleteRecurring(String recurringId) => write((l) => l.deleteRecurring(recurringId));
+  void deleteRecurring(String recurringId) =>
+      write((l) => l.deleteRecurring(recurringId));
 
   static const _metaDismissed = 'recurring.dismissed';
 
@@ -623,18 +689,25 @@ class AppState extends ChangeNotifier {
   /// Repeating records in the history that are not recurring items yet.
   List<RecurringCandidate> get recurringCandidates {
     if (_candidates == null || _candidatesRevision != revision) {
-      _candidates = detectRecurring(view, today: clock(), dismissed: _dismissedCandidates);
+      _candidates = detectRecurring(
+        view,
+        today: clock(),
+        dismissed: _dismissedCandidates,
+      );
       _candidatesRevision = revision;
     }
     return _candidates!;
   }
 
   /// Turns a detected pattern into a recurring item from its next date.
-  String? adoptCandidate(RecurringCandidate c) => saveRecurring(c.toRecurring(newId('r'))).$1;
+  String? adoptCandidate(RecurringCandidate c) =>
+      saveRecurring(c.toRecurring(newId('r'))).$1;
 
   /// Stops suggesting [c].
-  void dismissCandidate(RecurringCandidate c) =>
-      write((l) => l.setMeta(_metaDismissed, jsonEncode([..._dismissedCandidates, c.key])));
+  void dismissCandidate(RecurringCandidate c) => write(
+    (l) =>
+        l.setMeta(_metaDismissed, jsonEncode([..._dismissedCandidates, c.key])),
+  );
 
   static const _metaNotDuplicate = 'duplicates.dismissed';
 
@@ -644,8 +717,12 @@ class AppState extends ChangeNotifier {
   };
 
   /// The month's highlights (see [monthlyInsights]).
-  List<Insight> insightsFor(Period month) =>
-      monthlyInsights(view, month, today: clock(), dismissedDuplicates: _notDuplicates);
+  List<Insight> insightsFor(Period month) => monthlyInsights(
+    view,
+    month,
+    today: clock(),
+    dismissedDuplicates: _notDuplicates,
+  );
 
   List<List<Txn>>? _duplicates;
   int _duplicatesRevision = -1;
@@ -656,7 +733,10 @@ class AppState extends ChangeNotifier {
       final d = clock();
       _duplicates = possibleDuplicates(
         view,
-        Period(DateTime(d.year, d.month, d.day - 13), DateTime(d.year, d.month, d.day)),
+        Period(
+          DateTime(d.year, d.month, d.day - 13),
+          DateTime(d.year, d.month, d.day),
+        ),
         dismissed: _notDuplicates,
       );
       _duplicatesRevision = revision;
@@ -665,8 +745,12 @@ class AppState extends ChangeNotifier {
   }
 
   /// The user says [pair] are two real charges.
-  void notDuplicate(List<Txn> pair) =>
-      write((l) => l.setMeta(_metaNotDuplicate, jsonEncode([..._notDuplicates, duplicateKey(pair)])));
+  void notDuplicate(List<Txn> pair) => write(
+    (l) => l.setMeta(
+      _metaNotDuplicate,
+      jsonEncode([..._notDuplicates, duplicateKey(pair)]),
+    ),
+  );
 
   /// Adds or changes a budget; returns the user-facing error, if any.
   String? setBudget(Budget budget) => write((l) => l.setBudget(budget));
@@ -745,7 +829,10 @@ String recurringLabel(LedgerReader l, Recurring r) {
   final t = r.template;
   final what = t.kind == TxnKind.transfer
       ? '轉帳 ${l.account(t.accountId!)?.name ?? '？'} → ${l.account(t.toAccountId!)?.name ?? '？'}'
-      : t.note ?? (t.categoryId == null ? '未分類' : l.category(t.categoryId!)?.name ?? '未分類');
+      : t.note ??
+            (t.categoryId == null
+                ? '未分類'
+                : l.category(t.categoryId!)?.name ?? '未分類');
   return what;
 }
 
@@ -809,7 +896,9 @@ class AssistantSession extends ChangeNotifier {
         case AgentToolFinished(:final result):
           running[result.call.id]?.result = result;
         case AgentReply(:final text, :final usage):
-          items.add(ReplyChatItem(text.isEmpty ? '（AI 沒有回覆內容）' : text, usage: usage));
+          items.add(
+            ReplyChatItem(text.isEmpty ? '（AI 沒有回覆內容）' : text, usage: usage),
+          );
         case AgentFailed(:final message):
           items.add(ErrorChatItem(message));
       }

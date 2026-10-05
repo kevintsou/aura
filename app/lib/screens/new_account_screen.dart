@@ -3,6 +3,7 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../widgets/account_icon.dart';
 import 'account_fields.dart';
 
 /// Creates an account, optionally with today's real balance.
@@ -21,6 +22,7 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
   var _type = AccountType.bank;
   String? _currency = baseCurrency;
   String? _error;
+  String? _icon;
 
   @override
   void initState() {
@@ -61,7 +63,10 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
               date: dateOnly(widget.app.clock()).subtract(const Duration(days: 1)),
             ),
     );
-    final error = widget.app.write((l) => l.addAccount(account));
+    final error = widget.app.write((l) {
+      l.addAccount(account);
+      l.setMeta(accountIconKey(account.id), _icon);
+    });
     if (error != null) {
       setState(() => _error = error);
     } else {
@@ -86,6 +91,8 @@ class _NewAccountScreenState extends State<NewAccountScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          AccountIconField(app: widget.app, value: _icon, type: _type,
+            onChanged: (value) => setState(() => _icon = value)),
           TextField(
             key: const Key('newAccountName'),
             controller: _name,

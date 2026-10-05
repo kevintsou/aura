@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../format.dart';
+import '../widgets/account_icon.dart';
 import 'account_fields.dart';
 import 'dialogs.dart';
 
@@ -33,6 +34,7 @@ class _AccountScreenState extends State<AccountScreen> {
   late AccountType _type;
   String? _currency;
   String? _error;
+  String? _icon;
   var _mode = _Mode.today;
   late DateTime _date;
   late final List<AccountFlow> _flows;
@@ -55,6 +57,7 @@ class _AccountScreenState extends State<AccountScreen> {
     _name
       ..text = _account.name
       ..addListener(() => setState(() => _error = null));
+    _icon = _app.ledger.meta(accountIconKey(widget.accountId));
     _type = _account.type;
     _currency = _account.currency == unknownCurrency ? null : _account.currency;
   }
@@ -69,6 +72,7 @@ class _AccountScreenState extends State<AccountScreen> {
   String get _newName => _name.text.trim();
 
   bool get _detailsChanged =>
+      _icon != _app.ledger.meta(accountIconKey(widget.accountId)) ||
       _newName != _account.name ||
       _type != _account.type ||
       _currency != _account.currency;
@@ -140,6 +144,8 @@ class _AccountScreenState extends State<AccountScreen> {
         return;
       }
     }
+    final iconError = _app.write((l) => l.setMeta(accountIconKey(widget.accountId), _icon));
+    if (iconError != null) { setState(() => _error = iconError); return; }
     if (anchor != null) _app.setBalanceAnchor(widget.accountId, anchor);
     Navigator.pop(context);
   }
@@ -212,6 +218,8 @@ class _AccountScreenState extends State<AccountScreen> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          AccountIconField(app: _app, value: _icon, type: _type,
+            onChanged: (value) => setState(() => _icon = value)),
           TextField(
             key: const Key('accountName'),
             controller: _name,

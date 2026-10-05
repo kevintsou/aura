@@ -6,6 +6,7 @@ import '../app_state.dart';
 import '../format.dart';
 import '../lock/lock_settings_screen.dart';
 import '../widgets/charts.dart';
+import '../widgets/account_icon.dart';
 import 'account_fields.dart';
 import 'dialogs.dart';
 import 'account_screen.dart';
@@ -267,9 +268,7 @@ class _AccountTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final a = balance.account;
     return ListTile(
-      leading: balance.isSet && a.currency != unknownCurrency
-          ? const Icon(Icons.account_balance_wallet_outlined)
-          : Icon(Icons.error_outline, color: scheme.tertiary),
+      leading: AccountIcon(value: app.ledger.meta(accountIconKey(a.id)), type: a.type),
       title: Text(a.name),
       subtitle: Text(
         [

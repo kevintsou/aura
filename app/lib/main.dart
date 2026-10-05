@@ -13,17 +13,22 @@ import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'services/ai_settings_store.dart';
+import 'services/theme_settings_store.dart';
 import 'services/ledger_store.dart';
 import 'services/snapshot_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final lock = AppLock(store: DeviceLockStore(), biometrics: DeviceBiometrics());
+  final lock = AppLock(
+    store: DeviceLockStore(),
+    biometrics: DeviceBiometrics(),
+  );
   // Before the first frame, so a locked app never shows its data.
   await lock.load();
   final app = AppState(
     ledger: await openLedgerStore(),
     settings: DeviceAiSettingsStore(),
+    themeSettings: DeviceThemeSettingsStore(),
     snapshots: await openSnapshotStore(),
     lock: lock,
     cloudStore: DeviceCloudSettingsStore(),
@@ -42,17 +47,24 @@ class AuraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     ThemeData theme(Brightness b) => ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3B6E8F), brightness: b),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF3B6E8F),
+        brightness: b,
+      ),
     );
-    return MaterialApp(
-      title: 'Aura 記帳',
-      theme: theme(Brightness.light),
-      darkTheme: theme(Brightness.dark),
-      locale: const Locale('zh', 'TW'),
-      supportedLocales: const [Locale('zh', 'TW'), Locale('en')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      builder: (context, child) => LockGate(lock: app.lock, child: child!),
-      home: HomeShell(app: app),
+    return ListenableBuilder(
+      listenable: app.theme,
+      builder: (context, _) => MaterialApp(
+        themeMode: app.themeMode,
+        title: 'Aura 記帳',
+        theme: theme(Brightness.light),
+        darkTheme: theme(Brightness.dark),
+        locale: const Locale('zh', 'TW'),
+        supportedLocales: const [Locale('zh', 'TW'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        builder: (context, child) => LockGate(lock: app.lock, child: child!),
+        home: HomeShell(app: app),
+      ),
     );
   }
 }
@@ -90,7 +102,8 @@ class _HomeShellState extends State<HomeShell> {
     final run = widget.app.runRecurring();
     final messages = [
       if (run.recorded.isNotEmpty) '已自動記入 ${run.recorded.length} 筆週期收支',
-      if (run.problems.isNotEmpty) '有 ${run.problems.length} 個週期收支無法記帳，請到「設定 → 週期收支」檢查',
+      if (run.problems.isNotEmpty)
+        '有 ${run.problems.length} 個週期收支無法記帳，請到「設定 → 週期收支」檢查',
     ];
     if (messages.isEmpty) return;
     ScaffoldMessenger.of(context)
@@ -116,11 +129,26 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: tab,
         onDestinationSelected: (i) => widget.app.tab.value = i,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: '紀錄'),
-          NavigationDestination(icon: Icon(Icons.insights_outlined), label: '報表'),
-          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '帳戶'),
-          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI 助理'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), label: '設定'),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            label: '紀錄',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            label: '報表',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: '帳戶',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            label: 'AI 助理',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: '設定',
+          ),
         ],
       ),
     ),
