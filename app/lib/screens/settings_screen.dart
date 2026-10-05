@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../services/theme_settings_store.dart';
 import '../format.dart';
 import '../lock/lock_settings_screen.dart';
 import 'ai_settings_screen.dart';
@@ -27,18 +28,18 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
             title: const Text('佈景主題'),
-            trailing: DropdownButton<ThemeMode>(
+            trailing: DropdownButton<AppThemeOption>(
               key: const Key('themeMode'),
-              value: app.themeMode,
+              value: app.themeOption,
               items: const [
-                DropdownMenuItem(value: ThemeMode.system, child: Text('跟隨系統')),
-                DropdownMenuItem(value: ThemeMode.light, child: Text('淺色')),
-                DropdownMenuItem(value: ThemeMode.dark, child: Text('深色')),
+                DropdownMenuItem(value: AppThemeOption.light, child: Text('淺色')),
+                DropdownMenuItem(value: AppThemeOption.dark, child: Text('深色')),
+                DropdownMenuItem(value: AppThemeOption.system, child: Text('跟隨系統')),
               ],
               onChanged: (mode) async {
                 if (mode == null) return;
                 try {
-                  await app.setThemeMode(mode);
+                  await app.setThemeOption(mode);
                 } on Object {
                   if (context.mounted) showMessage(context, '無法儲存佈景主題，請再試一次');
                 }
@@ -162,11 +163,19 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => exportCwmoneyFile(context, app),
           ),
           const Divider(),
-          const AboutListTile(
-            icon: Icon(Icons.info_outline),
+          AboutListTile(
+            icon: const Icon(Icons.info_outline),
+            applicationIcon: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/branding/aura-logo-indigo.png',
+                width: 56,
+                height: 56,
+              ),
+            ),
             applicationName: 'Aura 記帳',
             applicationVersion: '0.1.0',
-            aboutBoxChildren: [Text('免費的記帳 App。AI 分析使用你自己的 API。')],
+            aboutBoxChildren: const [Text('免費的記帳 App。AI 分析使用你自己的 API。')],
           ),
         ],
       ),

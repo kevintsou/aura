@@ -1,33 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum AppThemeOption {
+  light,
+  dark,
+  system;
+
+  ThemeMode get mode => switch (this) {
+    light => ThemeMode.light,
+    dark => ThemeMode.dark,
+    system => ThemeMode.system,
+  };
+}
+
 abstract interface class ThemeSettingsStore {
-  Future<ThemeMode> load();
-  Future<void> save(ThemeMode mode);
+  Future<AppThemeOption> load();
+  Future<void> save(AppThemeOption mode);
 }
 
 class DeviceThemeSettingsStore implements ThemeSettingsStore {
   static const key = 'theme_mode';
 
   @override
-  Future<ThemeMode> load() async {
+  Future<AppThemeOption> load() async {
     final value = (await SharedPreferences.getInstance()).getString(key);
-    return ThemeMode.values.where((mode) => mode.name == value).firstOrNull ??
-        ThemeMode.system;
+    if (value == 'mint') {
+      await save(AppThemeOption.light);
+      return AppThemeOption.light;
+    }
+    return AppThemeOption.values
+            .where((mode) => mode.name == value)
+            .firstOrNull ??
+        AppThemeOption.light;
   }
 
   @override
-  Future<void> save(ThemeMode mode) async {
+  Future<void> save(AppThemeOption mode) async {
     await (await SharedPreferences.getInstance()).setString(key, mode.name);
   }
 }
 
 class MemoryThemeSettingsStore implements ThemeSettingsStore {
-  ThemeMode mode = ThemeMode.system;
+  AppThemeOption mode = AppThemeOption.light;
 
   @override
-  Future<ThemeMode> load() async => mode;
+  Future<AppThemeOption> load() async => mode;
 
   @override
-  Future<void> save(ThemeMode mode) async => this.mode = mode;
+  Future<void> save(AppThemeOption mode) async => this.mode = mode;
 }

@@ -196,8 +196,14 @@ void main() {
       // TWD accounts: 2,880 − 25,645 − 1,865 + 100,000 − 1,874.5 = 73,495.5;
       // −1,000 USD at 32.37 and −10,000 JPY at 0.201 (their newest records).
       expect(tester.widget<Text>(find.byKey(const Key('netWorth'))).data, 'NT\$39,116');
+      await tester.ensureVisible(find.byKey(const Key('accountRates')));
+      await tester.tap(find.byKey(const Key('accountRates')));
+      await tester.pumpAndSettle();
       expect(find.text('1 USD = NT\$32.37（2026/09/22 的紀錄）'), findsOneWidget);
       expect(find.text('1 JPY = NT\$0.201（2026/09/20 的紀錄）'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('accountBalanceNotice')));
+      await tester.tap(find.byKey(const Key('accountBalanceNotice')));
+      await tester.pumpAndSettle();
       expect(find.textContaining('有 7 個帳戶還沒設定餘額'), findsOneWidget);
     });
 
@@ -218,6 +224,9 @@ void main() {
       await tester.tap(find.byKey(const Key('saveAccount')));
       await tester.pumpAndSettle();
       expect(find.text('期初 NT\$225,645'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('accountBalanceNotice')));
+      await tester.tap(find.byKey(const Key('accountBalanceNotice')));
+      await tester.pumpAndSettle();
       expect(find.textContaining('有 6 個帳戶還沒設定餘額'), findsOneWidget);
       final savings = app.ledger.accounts.firstWhere((a) => a.name == '活存-測試');
       expect(savings.anchor!.date, DateTime(2026, 9, 29));
@@ -307,6 +316,9 @@ void main() {
       expect(app.ledger.accounts.firstWhere((a) => a.name == '定存-測試').currency, 'USD');
       // Its records were in NT$, so the newest "USD" record now implies a
       // rate of 1: TWD −26,504.5, USD 99,000 × 1, JPY −2,010.
+      await tester.ensureVisible(find.byKey(const Key('accountRates')));
+      await tester.tap(find.byKey(const Key('accountRates')));
+      await tester.pumpAndSettle();
       expect(find.text('1 USD = NT\$1（2026/09/23 的紀錄）'), findsOneWidget);
       expect(tester.widget<Text>(find.byKey(const Key('netWorth'))).data, 'NT\$70,486');
     });
@@ -336,6 +348,9 @@ void main() {
       );
       await tester.pumpWidget(AuraApp(app: app));
       await tester.tap(find.text('帳戶'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('accountBalanceNotice')));
+      await tester.tap(find.byKey(const Key('accountBalanceNotice')));
       await tester.pumpAndSettle();
       expect(find.textContaining('1 個外幣帳戶無法從名稱判斷幣別'), findsOneWidget);
       expect(find.textContaining('幣別未知'), findsOneWidget);

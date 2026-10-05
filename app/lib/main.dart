@@ -44,10 +44,31 @@ class AuraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     ThemeData theme(Brightness b) {
-      final base = ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3B6E8F), brightness: b),
-      );
+      var scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF283D70), brightness: b);
+      if (b == Brightness.light) {
+        scheme = scheme.copyWith(
+          primary: const Color(0xFF283D70),
+          onPrimary: Colors.white,
+          primaryContainer: const Color(0xFFE5EAF7),
+          onPrimaryContainer: const Color(0xFF18284E),
+          surface: Colors.white,
+          surfaceDim: const Color(0xFFE5E7EB),
+          surfaceBright: Colors.white,
+          surfaceContainerLowest: Colors.white,
+          surfaceContainerLow: const Color(0xFFF8F9FA),
+          surfaceContainer: const Color(0xFFF3F4F6),
+          surfaceContainerHigh: const Color(0xFFEDEFF2),
+          surfaceContainerHighest: const Color(0xFFE4E7EB),
+          onSurface: const Color(0xFF111827),
+          onSurfaceVariant: const Color(0xFF4B5563),
+          outlineVariant: const Color(0xFFDADDE1),
+        );
+      }
+      final base = ThemeData(colorScheme: scheme);
       return base.copyWith(
+        appBarTheme: b == Brightness.light
+            ? const AppBarTheme(backgroundColor: Colors.white, surfaceTintColor: Colors.transparent)
+            : base.appBarTheme,
         textTheme: base.textTheme.copyWith(
           bodyLarge: base.textTheme.bodyLarge?.copyWith(fontSize: 18),
           bodyMedium: base.textTheme.bodyMedium?.copyWith(fontSize: 16),
@@ -60,10 +81,11 @@ class AuraApp extends StatelessWidget {
     }
 
     return ListenableBuilder(
-      listenable: app.theme,
+      listenable: Listenable.merge([app.theme, app.themeSelection]),
       builder: (context, _) => MaterialApp(
         themeMode: app.themeMode,
         title: 'Aura 記帳',
+        debugShowCheckedModeBanner: false,
         theme: theme(Brightness.light),
         darkTheme: theme(Brightness.dark),
         locale: const Locale('zh', 'TW'),

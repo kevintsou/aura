@@ -126,12 +126,18 @@ class AppState extends ChangeNotifier {
   final LedgerStore ledger;
   final AiSettingsStore settings;
   final ThemeSettingsStore themeSettings;
-  final theme = ValueNotifier<ThemeMode>(ThemeMode.system);
+  final theme = ValueNotifier<ThemeMode>(ThemeMode.light);
+  AppThemeOption? _themeOption;
+  ValueNotifier<AppThemeOption>? _themeSelection;
+  ValueNotifier<AppThemeOption> get themeSelection => _themeSelection ??= ValueNotifier(themeOption);
+  AppThemeOption get themeOption => _themeOption ?? AppThemeOption.values.firstWhere((option) => option.name == theme.value.name);
   ThemeMode get themeMode => theme.value;
 
-  Future<void> setThemeMode(ThemeMode mode) async {
-    await themeSettings.save(mode);
-    theme.value = mode;
+  Future<void> setThemeOption(AppThemeOption option) async {
+    await themeSettings.save(option);
+    _themeOption = option;
+    theme.value = option.mode;
+    themeSelection.value = option;
     notifyListeners();
   }
 
@@ -362,7 +368,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    theme.value = await themeSettings.load();
+    _themeOption = await themeSettings.load();
+    theme.value = _themeOption!.mode;
+    themeSelection.value = _themeOption!;
     await cloud.load();
     aiConfig = await settings.loadConfig();
     _apiKey = await settings.loadApiKey(aiConfig.preset);

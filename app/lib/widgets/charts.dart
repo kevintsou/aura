@@ -321,10 +321,11 @@ String _spoken(Period p) {
 
 /// One horizontal magnitude bar (single hue), for ranked lists.
 class ShareBar extends StatelessWidget {
-  const ShareBar({super.key, required this.fraction});
+  const ShareBar({super.key, required this.fraction, this.color});
 
   /// 0–1 of the longest bar in the list.
   final double fraction;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -336,7 +337,7 @@ class ShareBar extends StatelessWidget {
         heightFactor: 1,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: ChartColors.of(context).accent,
+            color: color ?? ChartColors.of(context).accent,
             // Rounded at the data end, square at the baseline.
             borderRadius: const BorderRadius.horizontal(right: Radius.circular(4)),
           ),

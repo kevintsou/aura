@@ -1,11 +1,11 @@
 {
-    "name": "aura",
-    "short_name": "aura",
+    "name": "Aura 記帳",
+    "short_name": "Aura",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#283D70",
+    "theme_color": "#283D70",
+    "description": "輕鬆管理收支、帳戶與資產。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

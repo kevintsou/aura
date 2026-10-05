@@ -25,6 +25,10 @@ void main() {
     await tester.pumpAndSettle();
 
     String net() => tester.widget<Text>(find.byKey(const Key('netWorth'))).data!;
+    expect(find.byKey(const Key('rate-USD')), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('accountRates')));
+    await tester.tap(find.byKey(const Key('accountRates')));
+    await tester.pumpAndSettle();
     expect(find.text('1 USD = NT\$32.37（2026/09/22 的紀錄）'), findsOneWidget);
     final before = net();
     final usd = app.balances.values.firstWhere((b) => b.account.currency == 'USD').current;

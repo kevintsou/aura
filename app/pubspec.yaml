@@ -1,5 +1,5 @@
 name: aura
-description: "Aura 記帳：相容 CWMoney、可接自己的 AI Agent 的免費記帳 App。"
+description: "Aura 記帳：輕鬆管理收支、帳戶與資產，支援自己的 AI 助理。"
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -38,3 +38,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/aura-logo-indigo.png

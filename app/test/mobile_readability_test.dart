@@ -52,7 +52,7 @@ void main() {
           app.tab.value = tab;
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: 'tab $tab');
-          if (tab == 1 || tab == 4) {
+          if (tab == 1 || tab == 2 || tab == 4) {
             for (var scroll = 0; scroll < 3; scroll++) {
               await tester.drag(find.byType(ListView).last, const Offset(0, -450));
               await tester.pumpAndSettle();
