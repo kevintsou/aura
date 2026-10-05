@@ -8,6 +8,7 @@ import 'budgets_screen.dart';
 import 'category_picker.dart';
 import 'import_action.dart';
 import 'reports_screen.dart';
+import 'record_filter_sheet.dart';
 import 'scan_invoice.dart';
 import 'txn_edit_screen.dart';
 
@@ -28,22 +29,72 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   int? _revision;
   int _count = 0;
   int _review = 0;
+  TxnFilter? _selectedFilter;
+  TxnFilter get _filter => _selectedFilter ?? const TxnFilter();
+  set _filter(TxnFilter value) => _selectedFilter = value;
+  bool get _filtered =>
+      _filter.from != null ||
+      _filter.to != null ||
+      _filter.accountIds != null ||
+      _filter.kinds != null ||
+      _filter.keyword != null;
+
+  Future<void> _openFilter() async {
+    final chosen = await showModalBottomSheet<TxnFilter>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          RecordFilterSheet(initial: _filter, accounts: widget.app.view.accounts, today: widget.app.clock()),
+    );
+    if (chosen != null && mounted) {
+      setState(() {
+        _filter = chosen;
+        _revision = null;
+      });
+    }
+  }
+
+  void _clearFilter() => setState(() {
+    _filter = const TxnFilter();
+    _revision = null;
+  });
+
+  String get _filterLabel => [
+    if (_filter.from != null) '${formatDate(_filter.from!)} ～ ${formatDate(_filter.to!)}',
+    if (_filter.accountIds?.firstOrNull case final id?)
+      widget.app.view.accounts.where((a) => a.id == id).firstOrNull?.name ?? '帳戶',
+    if (_filter.kinds?.firstOrNull case final kind?)
+      switch (kind) {
+        TxnKind.income => '收入',
+        TxnKind.expense => '支出',
+        TxnKind.transfer => '轉帳',
+      },
+    if (_filter.keyword != null) '「${_filter.keyword}」',
+  ].join('・');
 
   void _refreshIfChanged() {
     if (_revision == widget.app.revision) return;
     _revision = widget.app.revision;
     _pages.clear();
     final ledger = widget.app.view;
-    _count = ledger.count();
-    _review = ledger.transactions(const TxnFilter(kinds: {TxnKind.transfer})).where((t) => t.needsReview).length;
+    _count = ledger.count(_filter);
+    _review = ledger
+        .transactions(
+          TxnFilter(
+            from: _filter.from,
+            to: _filter.to,
+            accountIds: _filter.accountIds,
+            kinds: _filter.kinds ?? {TxnKind.transfer},
+            keyword: _filter.keyword,
+          ),
+        )
+        .where((t) => t.kind == TxnKind.transfer && t.needsReview)
+        .length;
   }
 
   Txn _at(int index) {
     final page = index ~/ _pageSize;
-    final rows = _pages.putIfAbsent(
-      page,
-      () => widget.app.view.transactions(const TxnFilter(), page * _pageSize, _pageSize),
-    );
+    final rows = _pages.putIfAbsent(page, () => widget.app.view.transactions(_filter, page * _pageSize, _pageSize));
     return rows[index % _pageSize];
   }
 
@@ -53,8 +104,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     builder: (context, _) {
       _refreshIfChanged();
       final headers = [
-        ?budgetSummary(context, widget.app),
-        for (final pair in widget.app.recentDuplicates) _DuplicateBanner(app: widget.app, pair: pair),
+        if (!_filtered) ...[
+          ?budgetSummary(context, widget.app),
+          for (final pair in widget.app.recentDuplicates) _DuplicateBanner(app: widget.app, pair: pair),
+        ],
         if (_review > 0)
           MaterialBanner(
             content: Text('有 $_review 筆轉帳只找到一邊，請確認'),
@@ -67,6 +120,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         appBar: AppBar(
           title: Text(_count == 0 ? '紀錄' : '紀錄（$_count 筆）'),
           actions: [
+            IconButton(
+              key: const Key('recordsFilter'),
+              tooltip: '篩選紀錄',
+              icon: Icon(_filtered ? Icons.filter_alt : Icons.filter_alt_outlined),
+              onPressed: _openFilter,
+            ),
             if (canRecord)
               IconButton(
                 key: const Key('scanInvoice'),
@@ -85,14 +144,40 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 label: const Text('記一筆'),
               )
             : null,
-        body: _count == 0
-            ? _Empty(app: widget.app)
-            : ListView.separated(
-                itemCount: _count + headers.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) =>
-                    i < headers.length ? headers[i] : _TxnTile(app: widget.app, txn: _at(i - headers.length)),
+        body: Column(
+          children: [
+            if (_filtered)
+              ListTile(
+                key: const Key('activeRecordsFilter'),
+                title: Text(_filterLabel),
+                subtitle: Text('符合條件：$_count 筆'),
+                onTap: _openFilter,
+                trailing: IconButton(tooltip: '清除篩選', icon: const Icon(Icons.close), onPressed: _clearFilter),
               ),
+            Expanded(
+              child: _count == 0
+                  ? _filtered
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('沒有符合條件的紀錄'),
+                                const SizedBox(height: 12),
+                                TextButton(onPressed: _clearFilter, child: const Text('清除篩選')),
+                              ],
+                            ),
+                          )
+                        : _Empty(app: widget.app)
+                  : ListView.separated(
+                      key: ValueKey(_filter),
+                      itemCount: _count + headers.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) =>
+                          i < headers.length ? headers[i] : _TxnTile(app: widget.app, txn: _at(i - headers.length)),
+                    ),
+            ),
+          ],
+        ),
       );
     },
   );
